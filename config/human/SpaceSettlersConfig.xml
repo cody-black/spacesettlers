@@ -43,6 +43,10 @@
 			<configFile>human-clientinit.xml</configFile>
 		</HighLevelTeamConfig>
 		<HighLevelTeamConfig>
+			<teamName>ChaosCruisers</teamName>
+			<configFile>spacesettlersinit.xml</configFile>
+		</HighLevelTeamConfig>
+		<HighLevelTeamConfig>
 			<teamName>HeuristicMinerTeam</teamName>
 			<!-- Pick the one you intend to play against (self versus other) -->
 			<configFile>aggressive-heuristic-clientinit.xml</configFile>
@@ -59,6 +63,9 @@
 		</BaseConfig>
 		<BaseConfig>
 			<teamName>HumanTeam</teamName>
+		</BaseConfig>
+		<BaseConfig>
+			<teamName>ChaosCruisers</teamName>
 		</BaseConfig>
 		<BaseConfig>
 			<teamName>HeuristicMinerTeam</teamName>
