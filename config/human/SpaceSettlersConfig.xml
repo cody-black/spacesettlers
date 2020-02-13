@@ -43,7 +43,7 @@
 			<configFile>human-clientinit.xml</configFile>
 		</HighLevelTeamConfig>
 		<HighLevelTeamConfig>
-			<teamName>bee beehavior (Black and Zemlin)</teamName>
+			<teamName>Bee 🐝havior (Black and Zemlin)</teamName>
 			<configFile>spacesettlersinit.xml</configFile>
 		</HighLevelTeamConfig>
 		<HighLevelTeamConfig>
@@ -65,7 +65,7 @@
 			<teamName>HumanTeam</teamName>
 		</BaseConfig>
 		<BaseConfig>
-			<teamName>bee beehavior (Black and Zemlin)</teamName>
+			<teamName>Bee 🐝havior (Black and Zemlin)</teamName>
 		</BaseConfig>
 		<BaseConfig>
 			<teamName>HeuristicMinerTeam</teamName>
