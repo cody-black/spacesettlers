@@ -124,35 +124,40 @@ public class GarbageHeuristicTeamClient extends TeamClient {
 
 	@Override
 	public Set<SpacewarGraphics> getGraphics() {
-		boolean GRID_ON = false;
-		double GRID_SIZE = 40.0;
-		Color LINE_COLOR = Color.GRAY;
-		double SCREEN_WIDTH = 1600;
-		double SCREEN_HEIGHT = 1080;
+		boolean DEBUG_GRAPHICS = true;
 		
 		HashSet<SpacewarGraphics> newGraphics = new HashSet<SpacewarGraphics>();  
 		for (Position targetPos : targetsPos.values()) {
 			SpacewarGraphics graphic = new TargetGraphics(20, getTeamColor(), targetPos);
 			newGraphics.add(graphic);
 		}
-		if (GRID_ON) {
-			LineGraphics line;
-			// Add vertical lines
-			for (double i = GRID_SIZE; i < SCREEN_WIDTH; i += GRID_SIZE) {
-				line = new LineGraphics(new Position(i, 0), new Position(i, SCREEN_HEIGHT), new Vector2D(0, SCREEN_HEIGHT));
-				line.setLineColor(LINE_COLOR);
-				newGraphics.add(line);
-			}
-			// Add horizontal lines
-			for (double i = GRID_SIZE; i < SCREEN_HEIGHT; i += GRID_SIZE) {
-				line = new LineGraphics(new Position(0, i), new Position(SCREEN_WIDTH, i), new Vector2D(SCREEN_WIDTH, 0));
-				line.setLineColor(LINE_COLOR);
-				newGraphics.add(line);
-			}
+		if (DEBUG_GRAPHICS) {
+			newGraphics.addAll(drawGrid(new Position(0, 0), 40, 1080, 1600, Color.GRAY));
 		}
 		return newGraphics;
 	}
-
+	
+	/*
+	 * Draws a grid of squares of the given size, given the width and height of the grid,
+	 * the position of the upper left corner of the grid, and the color of the grid lines
+	 */
+	private Set<SpacewarGraphics> drawGrid(Position startPos, int gridSize, int height, int width, Color color) {
+		HashSet<SpacewarGraphics> grid = new HashSet<SpacewarGraphics>();
+		LineGraphics line;
+		// Add vertical lines
+		for (int i = (int)startPos.getX(); i <= width + startPos.getX(); i += gridSize) {
+			line = new LineGraphics(new Position(i, startPos.getY()), new Position(i, height + startPos.getY()), new Vector2D(0, height));
+			line.setLineColor(color);
+			grid.add(line);
+		}
+		// Add horizontal lines
+		for (int i = (int)startPos.getY(); i <= height + startPos.getY(); i += gridSize) {
+			line = new LineGraphics(new Position(startPos.getX(), i), new Position(width + startPos.getX(), i), new Vector2D(width, 0));
+			line.setLineColor(color);
+			grid.add(line);
+		}
+		return grid;
+	}
 
 	@Override
 	/**
