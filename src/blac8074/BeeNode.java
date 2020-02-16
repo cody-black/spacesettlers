@@ -46,4 +46,12 @@ public class BeeNode {
 	public void setCost(BeeNode node, Double cost) {
 		adjacencyMap.replace(node, cost);
 	}
+	
+	public double getCost(BeeNode node) {
+		return adjacencyMap.get(node);
+	}
+	
+	public HashMap<BeeNode, Double> getAdjacencyMap() {
+		return adjacencyMap;
+	}
 }

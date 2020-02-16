@@ -1,10 +1,13 @@
 package blac8074;
 
+import java.util.Map.Entry;
+
 public class BeeGraph {
 
 	private BeeNode[] nodes;
 	private int height;
 	private int width;
+	static double mult = 1000000.0;
 	
 	public BeeGraph(int size, int height, int width) {
 		nodes = new BeeNode[size];
@@ -24,20 +27,49 @@ public class BeeGraph {
 		return nodes.length;
 	}
 	
-	// When the node's grid square has an obstacle in it, it is obstructed
-	public void obstructNode(int index) {
-		if (!nodes[index].getObstructed()) {
-			nodes[index].setObstructed(true);
-			int[] adjacent = findAdjacentIndices(index);
-			for (int i = 0; i < 8; i++) {
-				nodes[adjacent[i]].setCost(nodes[index], Double.MAX_VALUE);
+	public int getWidth() {
+		return width;
+	}
+	
+	public int getHeight() {
+		return height;
+	}
+	
+	/*
+	 *  When the node's grid square has an obstacle in it, it is obstructed
+	 *  Returns true if a node has been obstructed
+	 */
+	public boolean obstructNode(int index) {
+		BeeNode node = nodes[index];
+		if (!node.getObstructed()) {
+			node.setObstructed(true);
+			// Change edge costs back to maximum
+			for (Entry<BeeNode, Double> adjNode: node.getAdjacencyMap().entrySet()) {
+				// Multiply edge cost by fixed amount so we can recover it later without recalculating cost
+				adjNode.getKey().setCost(node, adjNode.getKey().getCost(node) * mult);
 			}
+			return true;
 		}
 		else {
-			return;
+			return false;
 		}
 	}
-
+	
+	public boolean unobstructNode(int index) {
+		BeeNode node = nodes[index];
+		if (node.getObstructed()) {
+			node.setObstructed(false);
+			// Change edge costs back to normal
+			for (Entry<BeeNode, Double> adjNode: node.getAdjacencyMap().entrySet()) {
+				adjNode.getKey().setCost(node, adjNode.getKey().getCost(node) / mult);
+			}
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	
 	public int[] findAdjacentIndices(int index) {
 		int[] indices = new int[8];
 		int row = index / width;

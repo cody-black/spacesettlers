@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Map.Entry;
 
 import spacesettlers.actions.AbstractAction;
 import spacesettlers.actions.DoNothingAction;
@@ -15,8 +16,10 @@ import spacesettlers.clients.TeamClient;
 import spacesettlers.graphics.*;
 import spacesettlers.objects.AbstractActionableObject;
 import spacesettlers.objects.AbstractObject;
+import spacesettlers.objects.Asteroid;
 import spacesettlers.objects.powerups.SpaceSettlersPowerupEnum;
 import spacesettlers.objects.resources.ResourcePile;
+import spacesettlers.objects.weapons.AbstractWeapon;
 import spacesettlers.simulator.Toroidal2DPhysics;
 import spacesettlers.utilities.Position;
 import spacesettlers.utilities.Vector2D;
@@ -27,13 +30,12 @@ import blac8074.BeeGraph;
 public class BeehaviorTeamClient extends TeamClient {
 	BeeGraph graph;
 	static double GRID_SIZE = 40;
-	static int MAP_HEIGHT = 1080;
-	static int MAP_WIDTH = 1600;
+	HashMap<AbstractObject, Integer> obstacleMap;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
-		int numSquaresX = MAP_WIDTH / (int)GRID_SIZE;
-		int numSquaresY = MAP_HEIGHT / (int)GRID_SIZE;
+		int numSquaresX = space.getWidth() / (int)GRID_SIZE;
+		int numSquaresY = space.getHeight() / (int)GRID_SIZE;
 		graph = new BeeGraph(numSquaresX * numSquaresY, numSquaresY, numSquaresX);
 		BeeNode node;
 		Position position;
@@ -62,6 +64,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				//System.out.println("Add adjacent node " + adjacent[j] + " to node " + i + " with distance " + distance);
 			}
 		}
+		obstacleMap = new HashMap<AbstractObject, Integer>();
 	}
 
 	@Override
@@ -74,6 +77,39 @@ public class BeehaviorTeamClient extends TeamClient {
 	public Map<UUID, AbstractAction> getMovementStart(Toroidal2DPhysics space,
 			Set<AbstractActionableObject> actionableObjects) {
 		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();
+		int nodeIndex;
+		// TODO: allow obstacles to take up multiple grid squares...somehow
+		if ((space.getCurrentTimestep() % 10) == 0) {
+			for (Asteroid asteroid : space.getAsteroids()) {
+				if (!asteroid.isMineable()) {
+					nodeIndex = positionToNodeIndex(asteroid.getPosition());
+					if (!obstacleMap.containsKey(asteroid)) {
+						obstacleMap.put(asteroid, nodeIndex);
+						graph.obstructNode(nodeIndex);
+					}
+					// The asteroid has moved into a new grid square
+					else if (obstacleMap.get(asteroid) != nodeIndex) {
+						graph.unobstructNode(obstacleMap.get(asteroid));
+						graph.obstructNode(nodeIndex);
+						obstacleMap.put(asteroid, nodeIndex);
+					}
+				}
+			}
+		}
+		for (AbstractWeapon weapon : space.getWeapons()) {
+			nodeIndex = positionToNodeIndex(weapon.getPosition());
+			if (!obstacleMap.containsKey(weapon)) {
+				obstacleMap.put(weapon, nodeIndex);
+				graph.obstructNode(nodeIndex);
+			}
+			// The weapon has moved into a new grid square
+			else if (obstacleMap.get(weapon) != nodeIndex) {
+				graph.unobstructNode(obstacleMap.get(weapon));
+				graph.obstructNode(nodeIndex);
+				obstacleMap.put(weapon, nodeIndex);
+			}
+		}
+		
 		for (AbstractObject actionable : actionableObjects) {
 				actions.put(actionable.getId(), new DoNothingAction());
 		}
@@ -82,15 +118,34 @@ public class BeehaviorTeamClient extends TeamClient {
 
 	@Override
 	public void getMovementEnd(Toroidal2DPhysics space, Set<AbstractActionableObject> actionableObjects) {
-		// TODO Auto-generated method stub
+		for (Entry<AbstractObject, Integer> obstacle: obstacleMap.entrySet()) {
+			// If obstruction is dead, unobstruct the node
+			// TODO: this doesn't actually work
+			if (!obstacle.getKey().isAlive()) {
+				graph.unobstructNode(obstacle.getValue());
+				obstacleMap.remove(obstacle.getKey());
+				System.out.println("Removing dead object");
+			}
+		}
+		/*
+		// TODO: but this one does?
+		for (Asteroid asteroid : space.getAsteroids()) {
+			if (!asteroid.isAlive()) {
+				graph.unobstructNode(obstacleMap.get(asteroid));
+				obstacleMap.remove(asteroid);
+			}
+		}
+		*/
 		
 	}
 
 	@Override
 	public Set<SpacewarGraphics> getGraphics() {
 		boolean DEBUG_GRAPHICS = true;
+		
 		HashSet<SpacewarGraphics> newGraphics = new HashSet<SpacewarGraphics>();
 		if (DEBUG_GRAPHICS) {
+			// TODO: reduce lag when drawing lots of objects
 			// Draw grid on screen
 			newGraphics.addAll(drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY));
 			// Draw circles representing each node
@@ -99,7 +154,7 @@ public class BeehaviorTeamClient extends TeamClient {
 					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graph.getNode(i).getPosition()));
 				}
 				else {
-					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(i).getPosition()));
+					//newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(i).getPosition()));
 				}
 			}
 		}
@@ -144,4 +199,12 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		return grid;
 	}
+	
+	// Converts a position to the index of the grid square that contains that position
+	private int positionToNodeIndex(Position position) {
+		int x = (int)(position.getX() / GRID_SIZE);
+		int y = (int)(position.getY() / GRID_SIZE);
+		return x + y * graph.getWidth();
+	}
+	
 }
