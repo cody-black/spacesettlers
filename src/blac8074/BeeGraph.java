@@ -1,6 +1,7 @@
 package blac8074;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
 
@@ -148,19 +149,24 @@ public class BeeGraph {
 	}
 	
 	// TODO: Almost certain this isn't actually A*
-	public ArrayList<BeeNode> AStar(int startIndex, int goalIndex) {
-		int MAX_STEPS = 1000;
+	public ArrayList<BeeNode> getAStarPath(int startIndex, int goalIndex) {
+		int MAX_LOOPS = 1000;
 		int timeout = 0;
 		ArrayList<BeeNode> path = new ArrayList<BeeNode>();
-		PriorityQueue<BeeNode> frontier = new PriorityQueue<BeeNode>();
 		BeeNode startNode = nodes[startIndex];
 		BeeNode goalNode = nodes[goalIndex];
 		BeeNode currNode = startNode;
+		double currCost = 0;
+		double nextPriority;
+		// TODO: is this part even needed?
+		/*
 		if (startNode.getAdjacencyMap().containsKey(goalNode)) {
 			path.add(goalNode);
 			return path;
 		}
-		while ((currNode != goalNode) && (timeout < MAX_STEPS)) {
+		*/
+		/*
+		while ((currNode != goalNode) && (timeout < MAX_LOOPS)) {
 			for (Entry<BeeNode, Double> adjNode: currNode.getAdjacencyMap().entrySet()) {
 				if (!frontier.contains(adjNode.getKey())) {
 					adjNode.getKey().setTotalCost(adjNode.getValue() + this.findDistance(adjNode.getKey(), goalNode));
@@ -171,8 +177,56 @@ public class BeeGraph {
 			path.add(currNode);
 			++timeout;
 		}
-		
-		return path;
+		*/
+		if (startNode == goalNode) {
+			path.add(startNode);
+			return path;
+		}
+ 		
+		// A* search algorithm from notes on Canvas
+		HashSet<BeeNode> closed = new HashSet<BeeNode>();
+		PriorityQueue<BeeNode> frontier = new PriorityQueue<BeeNode>();
+		for (Entry<BeeNode, Double> adjNode: currNode.getAdjacencyMap().entrySet()) {
+			adjNode.getKey().setTotalCost(adjNode.getValue() + this.findDistance(adjNode.getKey(), goalNode));
+			frontier.add(adjNode.getKey());
+		}
+		path.add(startNode); // Not from the notes
+		while (true) {
+			if (frontier.isEmpty()) {
+				return path;
+			}
+			if (timeout == MAX_LOOPS) {
+				return path;
+			}
+			currNode = frontier.poll();
+			path.add(currNode);
+			currCost = 0;
+			for (int i = 0; i < path.size() - 1; i++) {
+				//currCost += path.get(i).getEdgeCost(path.get(i + 1));
+			}
+			if (currNode == goalNode) {
+				return path;
+			}
+			if (!closed.contains(currNode)) {
+				closed.add(currNode);
+				for (Entry<BeeNode, Double> adjNode: currNode.getAdjacencyMap().entrySet()) {
+					nextPriority = currCost + adjNode.getValue() + this.findDistance(adjNode.getKey(), goalNode);
+					if (frontier.contains(adjNode.getKey())) {
+						// Node already in frontier, but with higher f(n)
+						if (nextPriority < adjNode.getKey().getTotalCost()) {
+							adjNode.getKey().setTotalCost(nextPriority);
+							frontier.add(adjNode.getKey());
+						}
+					}
+					// Node is not closed
+					else if (!closed.contains(adjNode.getKey())) {
+						adjNode.getKey().setTotalCost(nextPriority);
+						frontier.add(adjNode.getKey());
+					}
+				}
+			}
+			++timeout;
+		}
 	}
 	
 	public int[] findAdjacentIndices(int index) {

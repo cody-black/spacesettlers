@@ -127,7 +127,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				Position currentPosition = ship.getPosition();
 				nodeIndex = positionToNodeIndex(currentPosition);
 				newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(nodeIndex).getPosition()));
-				ArrayList<BeeNode> path = graph.AStar(nodeIndex, positionToNodeIndex(findTarget(ship, space).getPosition()));
+				ArrayList<BeeNode> path = graph.getAStarPath(nodeIndex, positionToNodeIndex(findTarget(ship, space).getPosition()));
 				for (BeeNode node : path) {
 					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
 				}
