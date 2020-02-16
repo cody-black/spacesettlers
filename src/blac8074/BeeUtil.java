@@ -1,44 +1,8 @@
 package blac8074;
 
-public class BeeGraph {
-
-	private BeeNode[] nodes;
-	private int height;
-	private int width;
+public class BeeUtil {
 	
-	public BeeGraph(int size, int height, int width) {
-		nodes = new BeeNode[size];
-		this.height = height;
-		this.width = width;
-	}
-	
-	public void addNode(int index, BeeNode node) {
-		nodes[index] = node;
-	}
-	
-	public BeeNode getNode(int index) {
-		return nodes[index];
-	}
-	
-	public int getSize() {
-		return nodes.length;
-	}
-	
-	// When the node's grid square has an obstacle in it, it is obstructed
-	public void obstructNode(int index) {
-		if (!nodes[index].getObstructed()) {
-			nodes[index].setObstructed(true);
-			int[] adjacent = findAdjacentIndices(index);
-			for (int i = 0; i < 8; i++) {
-				nodes[adjacent[i]].setCost(nodes[index], Double.MAX_VALUE);
-			}
-		}
-		else {
-			return;
-		}
-	}
-
-	public int[] findAdjacentIndices(int index) {
+	public static int[] findAdjacentIndices(int index, int height, int width) {
 		int[] indices = new int[8];
 		int row = index / width;
 		int column = index % width;

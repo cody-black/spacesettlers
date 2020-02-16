@@ -34,7 +34,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	public void initialize(Toroidal2DPhysics space) {
 		int numSquaresX = MAP_WIDTH / (int)GRID_SIZE;
 		int numSquaresY = MAP_HEIGHT / (int)GRID_SIZE;
-		graph = new BeeGraph(numSquaresX * numSquaresY);
+		graph = new BeeGraph(numSquaresX * numSquaresY, numSquaresY, numSquaresX);
 		BeeNode node;
 		Position position;
 		for (int i = 0; i < graph.getSize(); i++) {
@@ -43,23 +43,23 @@ public class BeehaviorTeamClient extends TeamClient {
 			position = new Position(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE + GRID_SIZE / 2);
 			node = new BeeNode(position);
 			graph.addNode(i, node);
-			System.out.println("Created node " + i +  " at: " + node.getPosition());
+			//System.out.println("Created node " + i +  " at: " + node.getPosition());
 		}
 
-		// Add adjacent nodes to each node
-		// TODO
+		int[] adjacent;
+		double distance;
 		for (int i = 0; i < graph.getSize(); i++) {
-			// TODO: use findAdjacentIndicies?
-			// TODO: add nodes to the left at same time?
-			// Add adjacent nodes that are to the right
-			if (((i + 1) % numSquaresX) != 0) {
-				graph.getNode(i).addAdjacent(graph.getNode(i + 1), GRID_SIZE);
-				System.out.println("Add adjacent node " + (i+1) + " to node " + i);
-			}
-			// Add adjacent nodes that are to the right and wrap around
-			else {
-				graph.getNode(i).addAdjacent(graph.getNode(i - numSquaresX + 1), GRID_SIZE);
-				System.out.println("Add adjacent node " + (i - numSquaresX + 1) + " to node " + i);
+			adjacent = graph.findAdjacentIndices(i);
+			node = graph.getNode(i);
+			for (int j = 0; j < 8; j++) {
+				if (j < 4) {
+					distance = GRID_SIZE;
+				}
+				else {
+					distance = Math.sqrt(2 * GRID_SIZE * GRID_SIZE); 
+				}
+				node.addAdjacent(graph.getNode(adjacent[j]), distance);
+				//System.out.println("Add adjacent node " + adjacent[j] + " to node " + i + " with distance " + distance);
 			}
 		}
 	}
@@ -94,8 +94,13 @@ public class BeehaviorTeamClient extends TeamClient {
 			// Draw grid on screen
 			newGraphics.addAll(drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY));
 			// Draw circles representing each node
-			for (BeeNode node : graph.nodes) {
-				newGraphics.add(new CircleGraphics(Color.GREEN, node.getPosition()));
+			for (int i = 0; i < graph.getSize(); i++) {
+				if (graph.getNode(i).getObstructed()) {
+					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graph.getNode(i).getPosition()));
+				}
+				else {
+					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(i).getPosition()));
+				}
 			}
 		}
 		return newGraphics;
@@ -116,11 +121,6 @@ public class BeehaviorTeamClient extends TeamClient {
 			Set<AbstractActionableObject> actionableObjects) {
 		// TODO Auto-generated method stub
 		return null;
-	}
-
-	private int[] findAdjacentIndices(int index) {
-		int[] indicies = new int[8];
-		return indicies;
 	}
 	
 	/*
