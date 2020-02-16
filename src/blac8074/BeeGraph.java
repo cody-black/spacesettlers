@@ -1,18 +1,25 @@
 package blac8074;
 
+import java.util.ArrayList;
 import java.util.Map.Entry;
+import java.util.PriorityQueue;
+
+import spacesettlers.utilities.Position;
+import spacesettlers.utilities.Vector2D;
 
 public class BeeGraph {
 
 	private BeeNode[] nodes;
 	private int height;
 	private int width;
+	private double gridSize;
 	static double mult = 1000000.0;
 	
-	public BeeGraph(int size, int height, int width) {
+	public BeeGraph(int size, int height, int width, double gridSize) {
 		nodes = new BeeNode[size];
 		this.height = height;
 		this.width = width;
+		this.gridSize = gridSize;
 	}
 	
 	public void addNode(int index, BeeNode node) {
@@ -45,8 +52,8 @@ public class BeeGraph {
 			node.setObstructed(true);
 			// Change edge costs back to maximum
 			for (Entry<BeeNode, Double> adjNode: node.getAdjacencyMap().entrySet()) {
-				// Multiply edge cost by fixed amount so we can recover it later without recalculating cost
-				adjNode.getKey().setCost(node, adjNode.getKey().getCost(node) * mult);
+				// Multiply edge distance by fixed amount so we can recover it later without recalculating cost
+				adjNode.getKey().setEdgeCost(node, adjNode.getKey().getEdgeCost(node) * mult);
 			}
 			return true;
 		}
@@ -59,15 +66,113 @@ public class BeeGraph {
 		BeeNode node = nodes[index];
 		if (node.getObstructed()) {
 			node.setObstructed(false);
-			// Change edge costs back to normal
+			// Change edge distance back to normal
 			for (Entry<BeeNode, Double> adjNode: node.getAdjacencyMap().entrySet()) {
-				adjNode.getKey().setCost(node, adjNode.getKey().getCost(node) / mult);
+				adjNode.getKey().setEdgeCost(node, adjNode.getKey().getEdgeCost(node) / mult);
 			}
 			return true;
 		}
 		else {
 			return false;
 		}
+	}
+	
+	/*
+	 * Returns the distance between two nodes
+	 */
+	public double findDistance(int nodeIndex1, int nodeIndex2) {
+		return findShortestDistance(nodes[nodeIndex1].getPosition(), nodes[nodeIndex2].getPosition());
+	}
+	
+	public double findDistance(BeeNode node1, BeeNode node2) {
+		return findShortestDistance(node1.getPosition(), node2.getPosition());
+	}
+	
+	/**
+	 * Public interface to find the shortest toroidal distance from one location to
+	 * another. Returns a double (the distance). Use findShortestDistanceVector to
+	 * get the vector telling you which way to move along this path. Useful if you
+	 * just care about distance.
+	 * 
+	 * @param location1
+	 * @param location2
+	 * @return shortest distance length (magnitude of the vector pointing from
+	 *         location1 to location2)
+	 */
+	public double findShortestDistance(Position location1, Position location2) {
+		Vector2D shortDist = findShortestDistanceVector(location1, location2, width * (int)gridSize, height * (int)gridSize,
+				(width * gridSize) / 2.0, (height * gridSize) / 2.0);
+		return shortDist.getMagnitude();
+	}
+
+	/**
+	 * Finds the shortest distance in toroidal space. Returns a vector pointing from
+	 * the start to the target location and getMagnitude can be used to find the
+	 * distance and the angle.
+	 * 
+	 * @param location1
+	 * @param location2
+	 * @param width
+	 * @param height
+	 * @param halfWidth
+	 * @param halfHeight
+	 * @return
+	 */
+	private Vector2D findShortestDistanceVector(Position location1, Position location2, double width, double height,
+			double halfWidth, double halfHeight) {
+		double x = location2.getX() - location1.getX();
+		double y = location2.getY() - location1.getY();
+		if (x > halfWidth) {
+			if (y > halfHeight) {
+				return new Vector2D(x - width, y - height);
+			} else if (y < -halfHeight) {
+				return new Vector2D(x - width, y + height);
+			} else {
+				return new Vector2D(x - width, y);
+			}
+		} else if (x < -halfWidth) {
+			if (y > halfHeight) {
+				return new Vector2D(x + width, y - height);
+			} else if (y < -halfHeight) {
+				return new Vector2D(x + width, y + height);
+			} else {
+				return new Vector2D(x + width, y);
+			}
+		} else if (y > halfHeight) {
+			return new Vector2D(x, y - height);
+		} else if (y < -halfHeight) {
+			return new Vector2D(x, y + height);
+		} else {
+			return new Vector2D(x, y);
+		}
+	}
+	
+	// TODO: Almost certain this isn't actually A*
+	public ArrayList<BeeNode> AStar(int startIndex, int goalIndex) {
+		int MAX_STEPS = 1000;
+		int timeout = 0;
+		ArrayList<BeeNode> path = new ArrayList<BeeNode>();
+		PriorityQueue<BeeNode> frontier = new PriorityQueue<BeeNode>();
+		BeeNode startNode = nodes[startIndex];
+		BeeNode goalNode = nodes[goalIndex];
+		BeeNode currNode = startNode;
+		if (startNode.getAdjacencyMap().containsKey(goalNode)) {
+			path.add(goalNode);
+			return path;
+		}
+		while ((currNode != goalNode) && (timeout < MAX_STEPS)) {
+			for (Entry<BeeNode, Double> adjNode: currNode.getAdjacencyMap().entrySet()) {
+				if (!frontier.contains(adjNode.getKey())) {
+					adjNode.getKey().setTotalCost(adjNode.getValue() + this.findDistance(adjNode.getKey(), goalNode));
+					frontier.add(adjNode.getKey());
+				}
+			}
+			currNode = frontier.poll();
+			path.add(currNode);
+			++timeout;
+		}
+		
+		return path;
 	}
 	
 	public int[] findAdjacentIndices(int index) {

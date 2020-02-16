@@ -1,6 +1,7 @@
 package blac8074;
 
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -17,6 +18,8 @@ import spacesettlers.graphics.*;
 import spacesettlers.objects.AbstractActionableObject;
 import spacesettlers.objects.AbstractObject;
 import spacesettlers.objects.Asteroid;
+import spacesettlers.objects.Beacon;
+import spacesettlers.objects.Ship;
 import spacesettlers.objects.powerups.SpaceSettlersPowerupEnum;
 import spacesettlers.objects.resources.ResourcePile;
 import spacesettlers.objects.weapons.AbstractWeapon;
@@ -31,12 +34,13 @@ public class BeehaviorTeamClient extends TeamClient {
 	BeeGraph graph;
 	static double GRID_SIZE = 40;
 	HashMap<AbstractObject, Integer> obstacleMap;
+	HashSet<SpacewarGraphics> newGraphics;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
 		int numSquaresX = space.getWidth() / (int)GRID_SIZE;
 		int numSquaresY = space.getHeight() / (int)GRID_SIZE;
-		graph = new BeeGraph(numSquaresX * numSquaresY, numSquaresY, numSquaresX);
+		graph = new BeeGraph(numSquaresX * numSquaresY, numSquaresY, numSquaresX, GRID_SIZE);
 		BeeNode node;
 		Position position;
 		for (int i = 0; i < graph.getSize(); i++) {
@@ -64,6 +68,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				//System.out.println("Add adjacent node " + adjacent[j] + " to node " + i + " with distance " + distance);
 			}
 		}
+		newGraphics = new HashSet<SpacewarGraphics>();
 		obstacleMap = new HashMap<AbstractObject, Integer>();
 	}
 
@@ -76,7 +81,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	@Override
 	public Map<UUID, AbstractAction> getMovementStart(Toroidal2DPhysics space,
 			Set<AbstractActionableObject> actionableObjects) {
-		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();
+		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();		
 		int nodeIndex;
 		// TODO: allow obstacles to take up multiple grid squares...somehow
 		if ((space.getCurrentTimestep() % 10) == 0) {
@@ -87,11 +92,17 @@ public class BeehaviorTeamClient extends TeamClient {
 						obstacleMap.put(asteroid, nodeIndex);
 						graph.obstructNode(nodeIndex);
 					}
-					// The asteroid has moved into a new grid square
-					else if (obstacleMap.get(asteroid) != nodeIndex) {
-						graph.unobstructNode(obstacleMap.get(asteroid));
-						graph.obstructNode(nodeIndex);
-						obstacleMap.put(asteroid, nodeIndex);
+					else {
+						// The asteroid has moved into a new grid square
+						if (obstacleMap.get(asteroid) != nodeIndex) {
+							graph.unobstructNode(obstacleMap.get(asteroid));
+							graph.obstructNode(nodeIndex);
+							obstacleMap.put(asteroid, nodeIndex);
+						}
+						// The asteroid hasn't moved, make sure the node is still obstructed
+						else {
+							graph.obstructNode(nodeIndex);
+						}	
 					}
 				}
 			}
@@ -107,6 +118,19 @@ public class BeehaviorTeamClient extends TeamClient {
 				graph.unobstructNode(obstacleMap.get(weapon));
 				graph.obstructNode(nodeIndex);
 				obstacleMap.put(weapon, nodeIndex);
+			}
+		}
+		
+		for (AbstractObject actionable :  actionableObjects) {
+			if (actionable instanceof Ship) {
+				Ship ship = (Ship) actionable;
+				Position currentPosition = ship.getPosition();
+				nodeIndex = positionToNodeIndex(currentPosition);
+				newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(nodeIndex).getPosition()));
+				ArrayList<BeeNode> path = graph.AStar(nodeIndex, positionToNodeIndex(findTarget(ship, space).getPosition()));
+				for (BeeNode node : path) {
+					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+				}
 			}
 		}
 		
@@ -143,22 +167,24 @@ public class BeehaviorTeamClient extends TeamClient {
 	public Set<SpacewarGraphics> getGraphics() {
 		boolean DEBUG_GRAPHICS = true;
 		
-		HashSet<SpacewarGraphics> newGraphics = new HashSet<SpacewarGraphics>();
+		HashSet<SpacewarGraphics> graphics = new HashSet<SpacewarGraphics>();
 		if (DEBUG_GRAPHICS) {
 			// TODO: reduce lag when drawing lots of objects
 			// Draw grid on screen
-			newGraphics.addAll(drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY));
+			graphics.addAll(drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY));
 			// Draw circles representing each node
 			for (int i = 0; i < graph.getSize(); i++) {
 				if (graph.getNode(i).getObstructed()) {
-					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graph.getNode(i).getPosition()));
+					graphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graph.getNode(i).getPosition()));
 				}
 				else {
 					//newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(i).getPosition()));
 				}
 			}
 		}
-		return newGraphics;
+		graphics.addAll(newGraphics);
+		newGraphics.clear();
+		return graphics;
 	}
 
 
@@ -176,6 +202,22 @@ public class BeehaviorTeamClient extends TeamClient {
 			Set<AbstractActionableObject> actionableObjects) {
 		// TODO Auto-generated method stub
 		return null;
+	}
+	
+	public AbstractObject findTarget(Ship ship, Toroidal2DPhysics space) {
+		Set<Beacon> beacons = space.getBeacons();
+
+		Beacon closestBeacon = null;
+		double bestDistance = Double.POSITIVE_INFINITY;
+
+		for (Beacon beacon : beacons) {
+			double dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
+			if (dist < bestDistance) {
+				bestDistance = dist;
+				closestBeacon = beacon;
+			}
+		}
+		return closestBeacon;
 	}
 	
 	/*
