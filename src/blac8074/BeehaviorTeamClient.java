@@ -34,7 +34,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	BeeGraph graph;
 	static double GRID_SIZE = 40;
 	HashMap<AbstractObject, Integer> obstacleMap;
-	HashSet<SpacewarGraphics> newGraphics;
+	HashSet<SpacewarGraphics> pathGraphics;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -68,7 +68,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				//System.out.println("Add adjacent node " + adjacent[j] + " to node " + i + " with distance " + distance);
 			}
 		}
-		newGraphics = new HashSet<SpacewarGraphics>();
+		pathGraphics = new HashSet<SpacewarGraphics>();
 		obstacleMap = new HashMap<AbstractObject, Integer>();
 	}
 
@@ -125,11 +125,14 @@ public class BeehaviorTeamClient extends TeamClient {
 			if (actionable instanceof Ship) {
 				Ship ship = (Ship) actionable;
 				Position currentPosition = ship.getPosition();
-				nodeIndex = positionToNodeIndex(currentPosition);
-				newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(nodeIndex).getPosition()));
-				ArrayList<BeeNode> path = graph.getAStarPath(nodeIndex, positionToNodeIndex(findTarget(ship, space).getPosition()));
-				for (BeeNode node : path) {
-					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+				// Find new path every 20 timesteps
+				if ((space.getCurrentTimestep() % 20) == 0) {
+					pathGraphics.clear();
+					nodeIndex = positionToNodeIndex(currentPosition);
+					ArrayList<BeeNode> path = graph.getAStarPath(nodeIndex, positionToNodeIndex(findTarget(ship, space).getPosition()));
+					for (BeeNode node : path) {
+						pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+					}
 				}
 			}
 		}
@@ -169,7 +172,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		
 		HashSet<SpacewarGraphics> graphics = new HashSet<SpacewarGraphics>();
 		if (DEBUG_GRAPHICS) {
-			// TODO: reduce lag when drawing lots of objects
+			// TODO: find way(s) to reduce lag when drawing lots of objects
 			// Draw grid on screen
 			graphics.addAll(drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY));
 			// Draw circles representing each node
@@ -177,13 +180,9 @@ public class BeehaviorTeamClient extends TeamClient {
 				if (graph.getNode(i).getObstructed()) {
 					graphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graph.getNode(i).getPosition()));
 				}
-				else {
-					//newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(i).getPosition()));
-				}
 			}
 		}
-		graphics.addAll(newGraphics);
-		newGraphics.clear();
+		graphics.addAll(pathGraphics);
 		return graphics;
 	}
 
