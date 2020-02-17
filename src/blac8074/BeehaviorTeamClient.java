@@ -9,10 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.Map.Entry;
 
-import spacesettlers.actions.AbstractAction;
-import spacesettlers.actions.DoNothingAction;
-import spacesettlers.actions.PurchaseCosts;
-import spacesettlers.actions.PurchaseTypes;
+import spacesettlers.actions.*;
 import spacesettlers.clients.TeamClient;
 import spacesettlers.graphics.*;
 import spacesettlers.objects.AbstractActionableObject;
@@ -32,9 +29,10 @@ import blac8074.BeeGraph;
 
 public class BeehaviorTeamClient extends TeamClient {
 	BeeGraph graph;
-	static double GRID_SIZE = 40;
+	static double GRID_SIZE = 20;
 	HashMap<AbstractObject, Integer> obstacleMap;
 	HashSet<SpacewarGraphics> newGraphics;
+	PurePursuit pp;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -70,6 +68,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		newGraphics = new HashSet<SpacewarGraphics>();
 		obstacleMap = new HashMap<AbstractObject, Integer>();
+		pp = new PurePursuit();
 	}
 
 	@Override
@@ -131,11 +130,34 @@ public class BeehaviorTeamClient extends TeamClient {
 				for (BeeNode node : path) {
 					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
 				}
-			}
-		}
-		
-		for (AbstractObject actionable : actionableObjects) {
+
+				pp.setPath(path);
+
+				double radius = GRID_SIZE * 1.5; // starting radius at 1.5 grids away
+				Position goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
+
+				while (goal == null && radius < 1000) {
+					radius *= 1.25; // expand radius until we find place to go
+					goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
+				}
+
+				if (radius >= 1000) {
+					System.out.println("wtf where is the path");
+					actions.put(actionable.getId(), new DoNothingAction()); // do nothing i guess
+					continue;
+				}
+
+				MoveAction action = new MoveAction(space, ship.getPosition(), goal);
+
+				action.setKpRotational(30.0);
+				action.setKvRotational(2.0 * Math.sqrt(30.0));
+				action.setKpTranslational(16.0);
+				action.setKvTranslational(2.2 * Math.sqrt(16.0));
+
+				actions.put(actionable.getId(), action);
+			} else {
 				actions.put(actionable.getId(), new DoNothingAction());
+			}
 		}
 		return actions;
 	}
