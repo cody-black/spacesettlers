@@ -7,7 +7,7 @@ import spacesettlers.utilities.*;
 public class BeeNode implements Comparable<BeeNode>{
 	private Position position;
 	private boolean obstructed;
-	private double totalCost;
+	private double priority;
 	private HashMap<BeeNode, Double> adjacencyMap;
 	
 	public BeeNode() {
@@ -52,12 +52,12 @@ public class BeeNode implements Comparable<BeeNode>{
 		return adjacencyMap.get(node);
 	}
 	
-	public void setTotalCost(double totalCost) {
-		this.totalCost = totalCost;
+	public void setPriority(double priority) {
+		this.priority = priority;
 	}
 	
-	public double getTotalCost() {
-		return totalCost;
+	public double getPriority() {
+		return priority;
 	}
 	
 	public HashMap<BeeNode, Double> getAdjacencyMap() {
@@ -74,6 +74,6 @@ public class BeeNode implements Comparable<BeeNode>{
 	
 	@Override
 	public int compareTo(BeeNode node) {
-		return (int)(this.totalCost - node.getTotalCost());
+		return (int)(this.priority - node.getPriority());
 	}
 }

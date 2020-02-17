@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <TeamClientConfig>
 	<!-- The name of the client class (this is used to construct the client so it needs to be the full class name) -->
-	<classname>zeml9929.GarbageHeuristicTeamClient</classname>
+	<classname>blac8074.BeehaviorTeamClient</classname>
 	
 	<!-- You can choose the color your team's ships will be on the screen.  Specify the red, green, and blue components -->
 	<teamColorRed>255</teamColorRed>
-	<teamColorGreen>40</teamColorGreen>
-	<teamColorBlue>220</teamColorBlue>
+	<teamColorGreen>255</teamColorGreen>
+	<teamColorBlue>0</teamColorBlue>
 	
 	<!-- The name that shows up in the ladder -->
 	<ladderName>bee beehavior (Black and Zemlin)</ladderName>

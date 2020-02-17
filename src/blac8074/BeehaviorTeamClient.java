@@ -9,7 +9,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.Map.Entry;
 
-import spacesettlers.actions.*;
+import spacesettlers.actions.AbstractAction;
+import spacesettlers.actions.DoNothingAction;
+import spacesettlers.actions.PurchaseCosts;
+import spacesettlers.actions.PurchaseTypes;
 import spacesettlers.clients.TeamClient;
 import spacesettlers.graphics.*;
 import spacesettlers.objects.AbstractActionableObject;
@@ -29,10 +32,9 @@ import blac8074.BeeGraph;
 
 public class BeehaviorTeamClient extends TeamClient {
 	BeeGraph graph;
-	static double GRID_SIZE = 20;
+	static double GRID_SIZE = 40;
 	HashMap<AbstractObject, Integer> obstacleMap;
-	HashSet<SpacewarGraphics> newGraphics;
-	PurePursuit pp;
+	HashSet<SpacewarGraphics> pathGraphics;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -66,9 +68,8 @@ public class BeehaviorTeamClient extends TeamClient {
 				//System.out.println("Add adjacent node " + adjacent[j] + " to node " + i + " with distance " + distance);
 			}
 		}
-		newGraphics = new HashSet<SpacewarGraphics>();
+		pathGraphics = new HashSet<SpacewarGraphics>();
 		obstacleMap = new HashMap<AbstractObject, Integer>();
-		pp = new PurePursuit();
 	}
 
 	@Override
@@ -124,40 +125,20 @@ public class BeehaviorTeamClient extends TeamClient {
 			if (actionable instanceof Ship) {
 				Ship ship = (Ship) actionable;
 				Position currentPosition = ship.getPosition();
-				nodeIndex = positionToNodeIndex(currentPosition);
-				newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(nodeIndex).getPosition()));
-				ArrayList<BeeNode> path = graph.getAStarPath(nodeIndex, positionToNodeIndex(findTarget(ship, space).getPosition()));
-				for (BeeNode node : path) {
-					newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+				// Find new path every 20 timesteps
+				if ((space.getCurrentTimestep() % 20) == 0) {
+					pathGraphics.clear();
+					nodeIndex = positionToNodeIndex(currentPosition);
+					ArrayList<BeeNode> path = graph.getAStarPath(nodeIndex, positionToNodeIndex(findTarget(ship, space).getPosition()));
+					for (BeeNode node : path) {
+						pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+					}
 				}
-
-				pp.setPath(path);
-
-				double radius = GRID_SIZE * 1.5; // starting radius at 1.5 grids away
-				Position goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
-
-				while (goal == null && radius < 1000) {
-					radius *= 1.25; // expand radius until we find place to go
-					goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
-				}
-
-				if (radius >= 1000) {
-					System.out.println("wtf where is the path");
-					actions.put(actionable.getId(), new DoNothingAction()); // do nothing i guess
-					continue;
-				}
-
-				MoveAction action = new MoveAction(space, ship.getPosition(), goal);
-
-				action.setKpRotational(30.0);
-				action.setKvRotational(2.0 * Math.sqrt(30.0));
-				action.setKpTranslational(16.0);
-				action.setKvTranslational(2.2 * Math.sqrt(16.0));
-
-				actions.put(actionable.getId(), action);
-			} else {
-				actions.put(actionable.getId(), new DoNothingAction());
 			}
+		}
+		
+		for (AbstractObject actionable : actionableObjects) {
+				actions.put(actionable.getId(), new DoNothingAction());
 		}
 		return actions;
 	}
@@ -191,7 +172,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		
 		HashSet<SpacewarGraphics> graphics = new HashSet<SpacewarGraphics>();
 		if (DEBUG_GRAPHICS) {
-			// TODO: reduce lag when drawing lots of objects
+			// TODO: find way(s) to reduce lag when drawing lots of objects
 			// Draw grid on screen
 			graphics.addAll(drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY));
 			// Draw circles representing each node
@@ -199,13 +180,9 @@ public class BeehaviorTeamClient extends TeamClient {
 				if (graph.getNode(i).getObstructed()) {
 					graphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graph.getNode(i).getPosition()));
 				}
-				else {
-					//newGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, graph.getNode(i).getPosition()));
-				}
 			}
 		}
-		graphics.addAll(newGraphics);
-		newGraphics.clear();
+		graphics.addAll(pathGraphics);
 		return graphics;
 	}
 

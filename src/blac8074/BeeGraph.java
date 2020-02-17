@@ -1,6 +1,7 @@
 package blac8074;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
@@ -147,86 +148,78 @@ public class BeeGraph {
 			return new Vector2D(x, y);
 		}
 	}
-	
-	// TODO: Almost certain this isn't actually A*
+
+	/*
+	 * Uses A* to find a path from the start node to the goal node
+	 * TODO: clean this up
+	 */
 	public ArrayList<BeeNode> getAStarPath(int startIndex, int goalIndex) {
-		int MAX_LOOPS = 1000;
-		int timeout = 0;
-		ArrayList<BeeNode> path = new ArrayList<BeeNode>();
-		BeeNode startNode = nodes[startIndex];
-		BeeNode goalNode = nodes[goalIndex];
-		BeeNode currNode = startNode;
-		double currCost = 0;
-		double nextPriority;
-		// TODO: is this part even needed?
-		/*
-		if (startNode.getAdjacencyMap().containsKey(goalNode)) {
-			path.add(goalNode);
-			return path;
-		}
-		*/
-		/*
-		while ((currNode != goalNode) && (timeout < MAX_LOOPS)) {
-			for (Entry<BeeNode, Double> adjNode: currNode.getAdjacencyMap().entrySet()) {
-				if (!frontier.contains(adjNode.getKey())) {
-					adjNode.getKey().setTotalCost(adjNode.getValue() + this.findDistance(adjNode.getKey(), goalNode));
-					frontier.add(adjNode.getKey());
-				}
-			}
-			currNode = frontier.poll();
-			path.add(currNode);
-			++timeout;
-		}
-		*/
-		if (startNode == goalNode) {
-			path.add(startNode);
-			return path;
-		}
- 		
-		// A* search algorithm from notes on Canvas
+		// Yes, the start and goal nodes are switched
+		// Otherwise the path ArrayList would have to be reversed from start -> goal
+		// since this actually returns the path from goal -> start
+		BeeNode startNode = nodes[goalIndex];
+		BeeNode goalNode = nodes[startIndex];
+		
 		HashSet<BeeNode> closed = new HashSet<BeeNode>();
 		PriorityQueue<BeeNode> frontier = new PriorityQueue<BeeNode>();
-		for (Entry<BeeNode, Double> adjNode: currNode.getAdjacencyMap().entrySet()) {
-			adjNode.getKey().setTotalCost(adjNode.getValue() + this.findDistance(adjNode.getKey(), goalNode));
-			frontier.add(adjNode.getKey());
+		ArrayList<BeeNode> path = new ArrayList<BeeNode>();
+		int loopCount = 0;
+		int MAX_LOOPS = 1000;
+		BeeNode nextNode;
+		HashMap<BeeNode, Double> costAtNode = new HashMap<BeeNode, Double>();
+		double cost;
+		HashMap<BeeNode, BeeNode> parentMap = new HashMap<BeeNode, BeeNode>();
+		parentMap.put(startNode, null);
+		costAtNode.put(startNode, 0.0);
+		for (BeeNode adjNode : startNode.getAdjacencyMap().keySet()) {
+			cost = startNode.getEdgeCost(adjNode);
+			costAtNode.put(adjNode, cost);
+			adjNode.setPriority(cost + this.findDistance(adjNode, goalNode));
+			frontier.add(adjNode);
+			parentMap.put(adjNode, startNode);
 		}
-		path.add(startNode); // Not from the notes
 		while (true) {
 			if (frontier.isEmpty()) {
+				break;
+			}
+			if (loopCount == MAX_LOOPS) {
+				// System.out.println("A* pathfinding timed out");
 				return path;
 			}
-			if (timeout == MAX_LOOPS) {
-				return path;
+			nextNode = frontier.poll();
+			if (nextNode == goalNode) {
+				break;
 			}
-			currNode = frontier.poll();
-			path.add(currNode);
-			currCost = 0;
-			for (int i = 0; i < path.size() - 1; i++) {
-				//currCost += path.get(i).getEdgeCost(path.get(i + 1));
-			}
-			if (currNode == goalNode) {
-				return path;
-			}
-			if (!closed.contains(currNode)) {
-				closed.add(currNode);
-				for (Entry<BeeNode, Double> adjNode: currNode.getAdjacencyMap().entrySet()) {
-					nextPriority = currCost + adjNode.getValue() + this.findDistance(adjNode.getKey(), goalNode);
-					if (frontier.contains(adjNode.getKey())) {
-						// Node already in frontier, but with higher f(n)
-						if (nextPriority < adjNode.getKey().getTotalCost()) {
-							adjNode.getKey().setTotalCost(nextPriority);
-							frontier.add(adjNode.getKey());
+			if (!closed.contains(nextNode)) {
+				closed.add(nextNode);
+				for (BeeNode adjNode : nextNode.getAdjacencyMap().keySet()) {
+					cost = costAtNode.get(nextNode) + nextNode.getEdgeCost(adjNode);
+					if ((!costAtNode.containsKey(adjNode)) || cost < costAtNode.get(adjNode)) {
+						if (!closed.contains(adjNode)) {
+							costAtNode.put(adjNode, cost);
+							adjNode.setPriority(cost + this.findDistance(adjNode, goalNode));
+							frontier.add(adjNode);
+							parentMap.put(adjNode, nextNode);
 						}
-					}
-					// Node is not closed
-					else if (!closed.contains(adjNode.getKey())) {
-						adjNode.getKey().setTotalCost(nextPriority);
-						frontier.add(adjNode.getKey());
 					}
 				}
 			}
-			++timeout;
+			++loopCount;
 		}
+		loopCount = 0;
+		// Find path from goal to root of tree
+		nextNode = goalNode;
+		while (nextNode != startNode) {
+			if (loopCount == MAX_LOOPS) {
+				// System.out.println("A* pathfinding timed out");
+				return path;
+			}
+			path.add(nextNode);
+			nextNode = parentMap.get(nextNode);
+			++loopCount;
+		}
+		path.add(nextNode);
+		return path;
 	}
 	
 	public int[] findAdjacentIndices(int index) {
