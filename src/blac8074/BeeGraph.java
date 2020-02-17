@@ -222,6 +222,26 @@ public class BeeGraph {
 		return path;
 	}
 	
+	/**
+	 * Torridial wrap based on the height/width of the enviroment
+	 * 
+	 * @param position
+	 */
+	public Position toroidalWrap(Position position) {
+		Position newPos = position.deepCopy();
+		while (newPos.getX() < 0) {
+			newPos.setX(newPos.getX() + (width * gridSize));
+		}
+
+		while (newPos.getY() < 0) {
+			newPos.setY(newPos.getY() + (height * gridSize));
+		}
+
+		newPos.setX(newPos.getX() % (width * gridSize));
+		newPos.setY(newPos.getY() % (height * gridSize));
+		return newPos;
+	}
+	
 	public int[] findAdjacentIndices(int index) {
 		int[] indices = new int[8];
 		int row = index / width;

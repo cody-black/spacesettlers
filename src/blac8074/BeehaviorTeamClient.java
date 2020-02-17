@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.Map.Entry;
 
 import spacesettlers.actions.AbstractAction;
 import spacesettlers.actions.DoNothingAction;
@@ -33,7 +32,7 @@ import blac8074.BeeGraph;
 public class BeehaviorTeamClient extends TeamClient {
 	BeeGraph graph;
 	static double GRID_SIZE = 40;
-	HashMap<AbstractObject, Integer> obstacleMap;
+	HashMap<AbstractObject, ArrayList<Integer>> obstacleMap;
 	HashSet<SpacewarGraphics> pathGraphics;
 	
 	@Override
@@ -69,7 +68,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		pathGraphics = new HashSet<SpacewarGraphics>();
-		obstacleMap = new HashMap<AbstractObject, Integer>();
+		obstacleMap = new HashMap<AbstractObject, ArrayList<Integer>>();
 	}
 
 	@Override
@@ -82,31 +81,46 @@ public class BeehaviorTeamClient extends TeamClient {
 	public Map<UUID, AbstractAction> getMovementStart(Toroidal2DPhysics space,
 			Set<AbstractActionableObject> actionableObjects) {
 		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();		
-		int nodeIndex;
+		ArrayList<Integer> nodeIndexList;
+		ArrayList<Integer> unobstructList;
 		// TODO: allow obstacles to take up multiple grid squares...somehow
 		if ((space.getCurrentTimestep() % 10) == 0) {
 			for (Asteroid asteroid : space.getAsteroids()) {
 				if (!asteroid.isMineable()) {
-					nodeIndex = positionToNodeIndex(asteroid.getPosition());
+					nodeIndexList = objectToIndices(asteroid);
+					// Asteroid is not in obstacle map
 					if (!obstacleMap.containsKey(asteroid)) {
-						obstacleMap.put(asteroid, nodeIndex);
-						graph.obstructNode(nodeIndex);
-					}
-					else {
-						// The asteroid has moved into a new grid square
-						if (obstacleMap.get(asteroid) != nodeIndex) {
-							graph.unobstructNode(obstacleMap.get(asteroid));
+						obstacleMap.put(asteroid, nodeIndexList);
+						for (int nodeIndex : nodeIndexList) {
 							graph.obstructNode(nodeIndex);
-							obstacleMap.put(asteroid, nodeIndex);
 						}
-						// The asteroid hasn't moved, make sure the node is still obstructed
+					}
+					// Asteroid is already in obstacle map
+					else {
+						// The asteroid is located in different grid squares
+						if (obstacleMap.get(asteroid) != nodeIndexList) {
+							// Find which previously obstructed nodes need to be unobstructed
+							unobstructList = obstacleMap.get(asteroid);
+							unobstructList.removeAll(nodeIndexList);
+							for (int nodeIndex : unobstructList) {
+								graph.unobstructNode(nodeIndex);
+							}
+							for (int nodeIndex : nodeIndexList) {
+								graph.obstructNode(nodeIndex);
+							}
+							obstacleMap.put(asteroid, nodeIndexList);
+						}
+						// The asteroid hasn't moved, make sure the nodes are still obstructed
 						else {
-							graph.obstructNode(nodeIndex);
+							for (int nodeIndex : nodeIndexList) {
+								graph.obstructNode(nodeIndex);
+							}
 						}	
 					}
 				}
 			}
 		}
+		/*
 		for (AbstractWeapon weapon : space.getWeapons()) {
 			nodeIndex = positionToNodeIndex(weapon.getPosition());
 			if (!obstacleMap.containsKey(weapon)) {
@@ -120,6 +134,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				obstacleMap.put(weapon, nodeIndex);
 			}
 		}
+		*/
 		
 		for (AbstractObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
@@ -128,8 +143,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				// Find new path every 20 timesteps
 				if ((space.getCurrentTimestep() % 20) == 0) {
 					pathGraphics.clear();
-					nodeIndex = positionToNodeIndex(currentPosition);
-					ArrayList<BeeNode> path = graph.getAStarPath(nodeIndex, positionToNodeIndex(findTarget(ship, space).getPosition()));
+					ArrayList<BeeNode> path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(findTarget(ship, space).getPosition()));
 					for (BeeNode node : path) {
 						pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
 					}
@@ -145,25 +159,14 @@ public class BeehaviorTeamClient extends TeamClient {
 
 	@Override
 	public void getMovementEnd(Toroidal2DPhysics space, Set<AbstractActionableObject> actionableObjects) {
-		for (Entry<AbstractObject, Integer> obstacle: obstacleMap.entrySet()) {
-			// If obstruction is dead, unobstruct the node
-			// TODO: this doesn't actually work
-			if (!obstacle.getKey().isAlive()) {
-				graph.unobstructNode(obstacle.getValue());
-				obstacleMap.remove(obstacle.getKey());
-				System.out.println("Removing dead object");
-			}
-		}
-		/*
-		// TODO: but this one does?
 		for (Asteroid asteroid : space.getAsteroids()) {
 			if (!asteroid.isAlive()) {
-				graph.unobstructNode(obstacleMap.get(asteroid));
+				for (int nodeIndex : obstacleMap.get(asteroid)) {
+					graph.unobstructNode(nodeIndex);
+				}
 				obstacleMap.remove(asteroid);
 			}
 		}
-		*/
-		
 	}
 
 	@Override
@@ -248,4 +251,18 @@ public class BeehaviorTeamClient extends TeamClient {
 		return x + y * graph.getWidth();
 	}
 	
+	private ArrayList<Integer> objectToIndices(AbstractObject obj) {
+		double x = obj.getPosition().getX();
+		double y = obj.getPosition().getY();
+		int radius = obj.getRadius();
+		ArrayList<Integer> indices = new ArrayList<Integer>(4);
+		// TODO: add more based on grid size, ship size?
+		// Get position of corners of a square that contains the object - sometimes overestimates circular object's position
+		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x - radius, y + radius))));
+		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x + radius, y + radius))));
+		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x - radius, y - radius))));
+		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x + radius, y - radius))));
+		
+		return indices;
+	}
 }
