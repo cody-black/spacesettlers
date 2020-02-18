@@ -154,12 +154,12 @@ public class BeeGraph {
 	 * TODO: clean this up
 	 */
 	public ArrayList<BeeNode> getAStarPath(int startIndex, int goalIndex) {
+		unobstructNode(startIndex); // This won't return a path if the start node is obstructed
 		// Yes, the start and goal nodes are switched
 		// Otherwise the path ArrayList would have to be reversed from start -> goal
 		// since this actually returns the path from goal -> start
 		BeeNode startNode = nodes[goalIndex];
 		BeeNode goalNode = nodes[startIndex];
-		
 		HashSet<BeeNode> closed = new HashSet<BeeNode>();
 		PriorityQueue<BeeNode> frontier = new PriorityQueue<BeeNode>();
 		ArrayList<BeeNode> path = new ArrayList<BeeNode>();
@@ -243,7 +243,7 @@ public class BeeGraph {
 	}
 	
 	public int[] findAdjacentIndices(int index) {
-		int[] indices = new int[8];
+		int[] indices = new int[4];
 		int row = index / width;
 		int column = index % width;
 		// Adjacent indices that are to the right
@@ -278,6 +278,7 @@ public class BeeGraph {
 		else {
 			indices[3] = index - width * (height - 1);
 		}
+		/*
 		// Adjacent indices that are up and to the right
 		if (column != (width - 1)) {
 			if (row > 0) {
@@ -346,6 +347,7 @@ public class BeeGraph {
 				indices[7] = index - width * (height - 1) + width - 1;
 			}
 		}
+		*/
 		return indices;
 	}
 }

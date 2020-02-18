@@ -14,14 +14,10 @@ import spacesettlers.actions.PurchaseCosts;
 import spacesettlers.actions.PurchaseTypes;
 import spacesettlers.clients.TeamClient;
 import spacesettlers.graphics.*;
-import spacesettlers.objects.AbstractActionableObject;
-import spacesettlers.objects.AbstractObject;
-import spacesettlers.objects.Asteroid;
-import spacesettlers.objects.Beacon;
-import spacesettlers.objects.Ship;
-import spacesettlers.objects.powerups.SpaceSettlersPowerupEnum;
-import spacesettlers.objects.resources.ResourcePile;
-import spacesettlers.objects.weapons.AbstractWeapon;
+import spacesettlers.objects.*;
+import spacesettlers.objects.powerups.*;
+import spacesettlers.objects.resources.*;
+import spacesettlers.objects.weapons.*;
 import spacesettlers.simulator.Toroidal2DPhysics;
 import spacesettlers.utilities.Position;
 import spacesettlers.utilities.Vector2D;
@@ -31,13 +27,17 @@ import blac8074.BeeGraph;
 
 public class BeehaviorTeamClient extends TeamClient {
 	BeeGraph graph;
-	static double GRID_SIZE = 40;
+	// Size of each square in the grid (40 is the max int that works, higher values untested)
+	static double GRID_SIZE = 20;
 	HashMap<AbstractObject, ArrayList<Integer>> obstacleMap;
 	HashSet<SpacewarGraphics> pathGraphics;
+	HashSet<SpacewarGraphics> gridGraphics;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
+		// Number of grid squares in x dimension
 		int numSquaresX = space.getWidth() / (int)GRID_SIZE;
+		// Number of grid squares in y dimension
 		int numSquaresY = space.getHeight() / (int)GRID_SIZE;
 		graph = new BeeGraph(numSquaresX * numSquaresY, numSquaresY, numSquaresX, GRID_SIZE);
 		BeeNode node;
@@ -53,14 +53,17 @@ public class BeehaviorTeamClient extends TeamClient {
 
 		int[] adjacent;
 		double distance;
+		// Add adjacent nodes to each node
 		for (int i = 0; i < graph.getSize(); i++) {
 			adjacent = graph.findAdjacentIndices(i);
 			node = graph.getNode(i);
-			for (int j = 0; j < 8; j++) {
+			// Add edge costs for each adjacent node
+			for (int j = 0; j < adjacent.length; j++) {
 				if (j < 4) {
 					distance = GRID_SIZE;
 				}
 				else {
+					// a == b => c = sqrt(a^2 + b^2) = sqrt(2 * a^2) = sqrt(2 * a * a)
 					distance = Math.sqrt(2 * GRID_SIZE * GRID_SIZE); 
 				}
 				node.addAdjacent(graph.getNode(adjacent[j]), distance);
@@ -69,6 +72,8 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		pathGraphics = new HashSet<SpacewarGraphics>();
 		obstacleMap = new HashMap<AbstractObject, ArrayList<Integer>>();
+		// Store grid graphics so we don't have to re-draw it repeatedly
+		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
 	}
 
 	@Override
@@ -83,62 +88,38 @@ public class BeehaviorTeamClient extends TeamClient {
 		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();		
 		ArrayList<Integer> nodeIndexList;
 		ArrayList<Integer> unobstructList;
-		// TODO: allow obstacles to take up multiple grid squares...somehow
-		if ((space.getCurrentTimestep() % 10) == 0) {
-			for (Asteroid asteroid : space.getAsteroids()) {
-				if (!asteroid.isMineable()) {
-					nodeIndexList = objectToIndices(asteroid);
-					// Asteroid is not in obstacle map
-					if (!obstacleMap.containsKey(asteroid)) {
-						obstacleMap.put(asteroid, nodeIndexList);
-						for (int nodeIndex : nodeIndexList) {
-							graph.obstructNode(nodeIndex);
-						}
-					}
-					// Asteroid is already in obstacle map
-					else {
-						// The asteroid is located in different grid squares
-						if (obstacleMap.get(asteroid) != nodeIndexList) {
-							// Find which previously obstructed nodes need to be unobstructed
-							unobstructList = obstacleMap.get(asteroid);
-							unobstructList.removeAll(nodeIndexList);
-							for (int nodeIndex : unobstructList) {
-								graph.unobstructNode(nodeIndex);
-							}
-							for (int nodeIndex : nodeIndexList) {
-								graph.obstructNode(nodeIndex);
-							}
-							obstacleMap.put(asteroid, nodeIndexList);
-						}
-						// The asteroid hasn't moved, make sure the nodes are still obstructed
-						else {
-							for (int nodeIndex : nodeIndexList) {
-								graph.obstructNode(nodeIndex);
-							}
-						}	
-					}
-				}
+		// TODO: is there some other way to get our team name other than from a ship?
+		Ship ship = null;
+		for (AbstractObject actionable :  actionableObjects) {
+			if (actionable instanceof Ship) {
+				ship = (Ship) actionable;
+				break;
 			}
 		}
-		/*
-		for (AbstractWeapon weapon : space.getWeapons()) {
-			nodeIndex = positionToNodeIndex(weapon.getPosition());
-			if (!obstacleMap.containsKey(weapon)) {
-				obstacleMap.put(weapon, nodeIndex);
-				graph.obstructNode(nodeIndex);
+		if (ship != null) {
+			// Update obstructions of first half of graph on even timesteps
+			if ((space.getCurrentTimestep() & 1) == 0) {
+				findObstructions(ship.getRadius() / 2, space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
 			}
-			// The weapon has moved into a new grid square
-			else if (obstacleMap.get(weapon) != nodeIndex) {
-				graph.unobstructNode(obstacleMap.get(weapon));
-				graph.obstructNode(nodeIndex);
-				obstacleMap.put(weapon, nodeIndex);
+			// Update obstructions of last half of graph on odd timesteps
+			else {
+				findObstructions(ship.getRadius() / 2, space, ship.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
 			}
 		}
-		*/
+		else {
+			// Update obstructions of first half of graph on even timesteps
+			if ((space.getCurrentTimestep() & 1) == 0) {
+				findObstructions((int)GRID_SIZE / 4, space, null, 0, graph.getSize() / 2 - 1);
+			}
+			// Update obstructions of last half of graph on odd timesteps
+			else {
+				findObstructions((int)GRID_SIZE / 4, space, null, graph.getSize() / 2, graph.getSize() - 1);
+			}
+		}
 		
 		for (AbstractObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
-				Ship ship = (Ship) actionable;
+				ship = (Ship) actionable;
 				Position currentPosition = ship.getPosition();
 				// Find new path every 20 timesteps
 				if ((space.getCurrentTimestep() % 20) == 0) {
@@ -159,14 +140,7 @@ public class BeehaviorTeamClient extends TeamClient {
 
 	@Override
 	public void getMovementEnd(Toroidal2DPhysics space, Set<AbstractActionableObject> actionableObjects) {
-		for (Asteroid asteroid : space.getAsteroids()) {
-			if (!asteroid.isAlive()) {
-				for (int nodeIndex : obstacleMap.get(asteroid)) {
-					graph.unobstructNode(nodeIndex);
-				}
-				obstacleMap.remove(asteroid);
-			}
-		}
+
 	}
 
 	@Override
@@ -177,15 +151,16 @@ public class BeehaviorTeamClient extends TeamClient {
 		if (DEBUG_GRAPHICS) {
 			// TODO: find way(s) to reduce lag when drawing lots of objects
 			// Draw grid on screen
-			graphics.addAll(drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY));
-			// Draw circles representing each node
+			graphics.addAll(gridGraphics);
+			// Draw red circles representing each obstructed node
 			for (int i = 0; i < graph.getSize(); i++) {
 				if (graph.getNode(i).getObstructed()) {
 					graphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graph.getNode(i).getPosition()));
 				}
 			}
+			// Add the graphics representing the generated path
+			graphics.addAll(pathGraphics);
 		}
-		graphics.addAll(pathGraphics);
 		return graphics;
 	}
 
@@ -212,6 +187,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		Beacon closestBeacon = null;
 		double bestDistance = Double.POSITIVE_INFINITY;
 
+		// Find the closest beacon
 		for (Beacon beacon : beacons) {
 			double dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
 			if (dist < bestDistance) {
@@ -226,7 +202,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	 * Draws a grid (using lines) of squares of the given size, given the width and height of the grid,
 	 * the position of the upper left corner of the grid, and the color of the grid lines
 	 */
-	private Set<SpacewarGraphics> drawGrid(Position startPos, double gridSize, int height, int width, Color color) {
+	private HashSet<SpacewarGraphics> drawGrid(Position startPos, double gridSize, int height, int width, Color color) {
 		HashSet<SpacewarGraphics> grid = new HashSet<SpacewarGraphics>();
 		LineGraphics line;
 		// Add vertical lines
@@ -264,5 +240,61 @@ public class BeehaviorTeamClient extends TeamClient {
 		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x + radius, y - radius))));
 		
 		return indices;
+	}
+
+	public void findObstructions(int radius, Toroidal2DPhysics space, String teamName, int startIndex, int stopIndex) {
+		boolean obstructionFound;
+		for (int nodeIndex = startIndex; nodeIndex <= stopIndex; nodeIndex++) {
+			obstructionFound = false;
+			for (Asteroid asteroid : space.getAsteroids()) {
+				if (!asteroid.isMineable()) {
+					// fixed bug where it only checked radius and not diameter
+					if (space.findShortestDistanceVector(asteroid.getPosition(), graph.getNode(nodeIndex).getPosition())
+							.getMagnitude() <= (radius + (2 * asteroid.getRadius()))) {
+						graph.obstructNode(nodeIndex);
+						obstructionFound = true;
+						break;
+					}
+				}
+			}
+			if (!obstructionFound) {
+				for (Base base : space.getBases()) {
+					if (space.findShortestDistanceVector(base.getPosition(), graph.getNode(nodeIndex).getPosition())
+							.getMagnitude() <= (radius + (2 * base.getRadius()))) {
+						graph.obstructNode(nodeIndex);
+						obstructionFound = true;
+						break;
+					}
+				}
+			}
+			if (!obstructionFound && (teamName != null)) {
+				for (Ship ship : space.getShips()) {
+					if (!ship.getTeamName().equals(teamName)) {
+						if (space.findShortestDistanceVector(ship.getPosition(), graph.getNode(nodeIndex).getPosition())
+								.getMagnitude() <= (radius + (2 * ship.getRadius()))) {
+							graph.obstructNode(nodeIndex);
+							obstructionFound = true;
+							break;
+						}
+					}
+				}
+			}
+			if (!obstructionFound) {
+				for (AbstractWeapon weapon : space.getWeapons()) {
+					if (space.findShortestDistanceVector(weapon.getPosition(), graph.getNode(nodeIndex).getPosition())
+							.getMagnitude() <= (radius + (2 * weapon.getRadius()))) {
+						graph.obstructNode(nodeIndex);
+						obstructionFound = true;
+						break;
+					}
+				}
+			}
+			if (!obstructionFound) {
+				// TODO: Check more object types
+			}
+			if (!obstructionFound) {
+				graph.unobstructNode(nodeIndex);
+			}
+		}
 	}
 }

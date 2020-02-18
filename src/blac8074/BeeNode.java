@@ -72,6 +72,9 @@ public class BeeNode implements Comparable<BeeNode>{
 	}
 	*/
 	
+	/*
+	 * Mainly for telling a PriorityQueue how to prioritize nodes (I think)
+	 */
 	@Override
 	public int compareTo(BeeNode node) {
 		return (int)(this.priority - node.getPriority());
