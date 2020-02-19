@@ -137,20 +137,29 @@ public class BeehaviorTeamClient extends TeamClient {
 							pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
 						}
 					}
-					pp.setPath(path);
-					paths.put(ship, path);				
+					paths.put(ship, path);
+				}
+				pp.setPath(paths.get(ship));
+
+				double radius = GRID_SIZE * 1.5; // starting radius at 1.5 grids away
+				Position goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
+
+				while (goal == null && radius < 1000) {
+					radius *= 1.25; // expand radius until we find place to go
+					goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
 				}
 
-				// Always move based on last path
-				// TODO: Handle multiple agents in the future (multiple PurePursuits)
-				Position goalPos = pp.getLookaheadPoint(space, ship.getPosition(), 1.5 * GRID_SIZE);
+				if (radius >= 1000) {
+					System.out.println("wtf where is the path");
+					actions.put(actionable.getId(), new DoNothingAction()); // do nothing i guess
+					continue;
+				}
+				MoveAction action = new MoveAction(space, ship.getPosition(), goal);
 
-				MoveAction action = new MoveAction(space, ship.getPosition(), goalPos);
-
-				action.setKpRotational(25.0);
-				action.setKvRotational(2.0 * Math.sqrt(25.0));
-				action.setKpTranslational(9.0);
-				action.setKvTranslational(2.2 * Math.sqrt(9.0));
+				action.setKpRotational(30.0);
+				action.setKvRotational(2.0 * Math.sqrt(30.0));
+				action.setKpTranslational(16.0);
+				action.setKvTranslational(2.2 * Math.sqrt(16.0));
 
 				actions.put(actionable.getId(), action);
 			}
