@@ -27,7 +27,7 @@ import blac8074.BeeGraph;
 
 public class BeehaviorTeamClient extends TeamClient {
 	BeeGraph graph;
-	// Size of each square in the grid (40 is the max int that works, higher values untested)
+	// Size of each square in the grid (40 is the max int that works, 10 kinda works but lags, higher/lower values untested)
 	static double GRID_SIZE = 20;
 	HashMap<AbstractObject, ArrayList<Integer>> obstacleMap;
 	HashSet<SpacewarGraphics> pathGraphics;
@@ -41,21 +41,19 @@ public class BeehaviorTeamClient extends TeamClient {
 		int numSquaresY = space.getHeight() / (int)GRID_SIZE;
 		graph = new BeeGraph(numSquaresX * numSquaresY, numSquaresY, numSquaresX, GRID_SIZE);
 		BeeNode node;
-		Position position;
 		for (int i = 0; i < graph.getSize(); i++) {
 			int x = i % numSquaresX;
 			int y = i / numSquaresX;
-			position = new Position(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE + GRID_SIZE / 2);
-			node = new BeeNode(position);
+			Position nodePos = new Position(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE + GRID_SIZE / 2);
+			node = new BeeNode(nodePos);
 			graph.addNode(i, node);
 			//System.out.println("Created node " + i +  " at: " + node.getPosition());
 		}
 
-		int[] adjacent;
-		double distance;
 		// Add adjacent nodes to each node
 		for (int i = 0; i < graph.getSize(); i++) {
-			adjacent = graph.findAdjacentIndices(i);
+			double distance;
+			int[] adjacent = graph.findAdjacentIndices(i);
 			node = graph.getNode(i);
 			// Add edge costs for each adjacent node
 			for (int j = 0; j < adjacent.length; j++) {
@@ -86,8 +84,6 @@ public class BeehaviorTeamClient extends TeamClient {
 	public Map<UUID, AbstractAction> getMovementStart(Toroidal2DPhysics space,
 			Set<AbstractActionableObject> actionableObjects) {
 		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();		
-		ArrayList<Integer> nodeIndexList;
-		ArrayList<Integer> unobstructList;
 		// TODO: is there some other way to get our team name other than from a ship?
 		Ship ship = null;
 		for (AbstractObject actionable :  actionableObjects) {
@@ -116,6 +112,22 @@ public class BeehaviorTeamClient extends TeamClient {
 				findObstructions((int)GRID_SIZE / 4, space, null, graph.getSize() / 2, graph.getSize() - 1);
 			}
 		}
+		/*
+		// TODO: currently somewhat broken code for obstructing nodes in front of a 
+		// bullet so the ship paths around it
+		for (AbstractWeapon weapon : space.getWeapons()) {
+			Position weaponPos = weapon.getPosition();
+			double weaponPosX = weaponPos.getX();
+			double weaponPosY = weaponPos.getY();
+			double weaponVelX = weaponPos.getxVelocity();
+			double weaponVelY = weaponPos.getyVelocity();
+			for (int i = 0; i < 15; i++) {
+				int nodeIndex = positionToNodeIndex(new Position(weaponPosX + weaponVelX * ((double)i / 5.0), weaponPosY + weaponVelY * ((double)i / 5.0)));
+				graph.obstructNode(nodeIndex);
+			}
+			
+		}
+		*/
 		
 		for (AbstractObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
@@ -226,7 +238,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		int y = (int)(position.getY() / GRID_SIZE);
 		return x + y * graph.getWidth();
 	}
-	
+	/*
 	private ArrayList<Integer> objectToIndices(AbstractObject obj) {
 		double x = obj.getPosition().getX();
 		double y = obj.getPosition().getY();
@@ -241,11 +253,11 @@ public class BeehaviorTeamClient extends TeamClient {
 		
 		return indices;
 	}
+	*/
 
 	public void findObstructions(int radius, Toroidal2DPhysics space, String teamName, int startIndex, int stopIndex) {
-		boolean obstructionFound;
 		for (int nodeIndex = startIndex; nodeIndex <= stopIndex; nodeIndex++) {
-			obstructionFound = false;
+			boolean obstructionFound = false;
 			for (Asteroid asteroid : space.getAsteroids()) {
 				if (!asteroid.isMineable()) {
 					// fixed bug where it only checked radius and not diameter
@@ -290,7 +302,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 			if (!obstructionFound) {
-				// TODO: Check more object types
+				// TODO: Check more object types?
 			}
 			if (!obstructionFound) {
 				graph.unobstructNode(nodeIndex);

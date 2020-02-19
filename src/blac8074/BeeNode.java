@@ -77,6 +77,17 @@ public class BeeNode implements Comparable<BeeNode>{
 	 */
 	@Override
 	public int compareTo(BeeNode node) {
-		return (int)(this.priority - node.getPriority());
+		if ((this.priority - node.getPriority()) < 0) {
+			return -1;
+		}
+		else if ((this.priority - node.getPriority()) > 0) {
+			return 1;
+		}
+		else {
+			return 0;
+		}
+		// This wouldn't return the right number if 
+		// this.priority - node.getPriority() was between -1 and 1 and not 0
+		//return (int)(this.priority - node.getPriority());
 	}
 }

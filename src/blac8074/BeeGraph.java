@@ -223,7 +223,7 @@ public class BeeGraph {
 	}
 	
 	/**
-	 * Torridial wrap based on the height/width of the enviroment
+	 * Toroidal wrap based on the height/width of the environment
 	 * 
 	 * @param position
 	 */
