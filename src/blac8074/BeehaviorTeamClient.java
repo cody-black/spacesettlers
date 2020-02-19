@@ -93,13 +93,27 @@ public class BeehaviorTeamClient extends TeamClient {
 				break;
 			}
 		}
-		// Update obstructions of first half of graph on even timesteps
-		if ((space.getCurrentTimestep() & 1) == 0) {
-			findObstructions(ship.getRadius() / 2, space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
+		// Update obstructions frequently to make the debug graphics more responsive
+		if (DEBUG_GRAPHICS) {
+			// Update obstructions of first half of graph on even timesteps
+			if ((space.getCurrentTimestep() & 1) == 0) {
+				findObstructions(ship.getRadius(), space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
+			}
+			// Update obstructions of last half of graph on odd timesteps
+			else {
+				findObstructions(ship.getRadius(), space, ship.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
+			}
 		}
-		// Update obstructions of last half of graph on odd timesteps
+		// Update obstructions only once before calculating new path
 		else {
-			findObstructions(ship.getRadius() / 2, space, ship.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
+			// Update obstructions of first half of graph 1 timestep before the path is calculated
+			if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == (PATH_UPDATE_INTERVAL - 1)) {
+				findObstructions(ship.getRadius(), space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
+			}
+			// Update obstructions of last half two timesteps before the path is calculated
+			else if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == (PATH_UPDATE_INTERVAL - 2)) {
+				findObstructions(ship.getRadius(), space, ship.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
+			}
 		}
 		
 		for (AbstractObject actionable :  actionableObjects) {
