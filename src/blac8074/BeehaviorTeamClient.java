@@ -124,24 +124,32 @@ public class BeehaviorTeamClient extends TeamClient {
 				// Find new path every so many timesteps
 				if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
 					ArrayList<BeeNode> path;
-					Position targetPos = findTarget(ship, space).getPosition();
-					// Generate path using selected algorithm
-					if (A_STAR) {
-						path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					AbstractObject target = findTarget(ship, space);
+					// If we have a valid target
+					if (target != null) {
+						Position targetPos = findTarget(ship, space).getPosition();
+						// Generate path using A* algorithm
+						if (A_STAR) {
+							path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+						}
+						// Generate path using other algorithm (hill climbing)
+						else {
+							path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+						}
+						// Create new path graphics
+						if (DEBUG_GRAPHICS) {
+							pathGraphics.clear();
+							// Add green circles representing nodes on the path
+							for (BeeNode node : path) {
+								pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+							}
+						}
+						bp.setPath(path);
+						paths.put(ship, path);		
 					}
 					else {
-						path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+						actions.put(actionable.getId(), new DoNothingAction());
 					}
-					// Create new path graphics
-					if (DEBUG_GRAPHICS) {
-						pathGraphics.clear();
-						// Add green circles representing nodes on the path
-						for (BeeNode node : path) {
-							pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
-						}
-					}
-					bp.setPath(path);
-					paths.put(ship, path);				
 				}
 
 				// Always make a move based on last path
@@ -231,12 +239,54 @@ public class BeehaviorTeamClient extends TeamClient {
 	}
 	
 	public AbstractObject findTarget(Ship ship, Toroidal2DPhysics space) {
+		AbstractObject targetObj = null;
+		// We are low on energy -> go get a beacon
+		if (ship.getEnergy() < 2000) {
+			Beacon beacon = pickNearestBeacon(space, ship);
+			if (beacon != null) {
+				return beacon;
+			}
+		}
+		// We don't have a core -> check for cores
+		if (ship.getNumCores() == 0) {
+			AiCore core = pickNearestFreeCore(space, ship);
+			// There is a core -> go get it
+			if (core != null) {
+				return core;
+			}
+			// There isn't a core -> continue getting beacons
+			else {
+				Beacon beacon = pickNearestBeacon(space, ship);
+				if (beacon != null) {
+					return beacon;
+				}
+			}
+		} 
+		// Return core to base
+		else {
+			AiCore core = pickNearestFreeCore(space, ship);
+			// There is another core but we are low on energy -> go to base
+			if ((core == null) || (ship.getEnergy() < 2000)) {
+				Base base = pickNearestFriendlyBase(space, ship);
+				if (base != null) {
+					return base;
+				}
+			}
+			// There are multiple cores and we have enough energy -> go get another core
+			else {
+				return core;
+			}
+		}
+		return targetObj;
+	}
+	
+	private Beacon pickNearestBeacon(Toroidal2DPhysics space, Ship ship) {
+		// get the current beacons
 		Set<Beacon> beacons = space.getBeacons();
 
 		Beacon closestBeacon = null;
 		double bestDistance = Double.POSITIVE_INFINITY;
 
-		// Find the closest beacon
 		for (Beacon beacon : beacons) {
 			double dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
 			if (dist < bestDistance) {
@@ -245,6 +295,42 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		return closestBeacon;
+	}
+	
+	private Base pickNearestFriendlyBase(Toroidal2DPhysics space, Ship ship) {
+		// get the current beacons
+		Set<Base> bases = space.getBases();
+
+		Base closestBase = null;
+		double bestDistance = Double.POSITIVE_INFINITY;
+
+		for (Base base : bases) {
+			if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
+				double dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
+				if (dist < bestDistance) {
+					bestDistance = dist;
+					closestBase = base;
+				}
+			}
+		}
+		return closestBase;
+	}
+	
+	private AiCore pickNearestFreeCore(Toroidal2DPhysics space, Ship ship) {
+		Set<AiCore> cores = space.getCores();
+
+		AiCore closestCore = null;
+		double bestDistance = Double.POSITIVE_INFINITY;
+
+		for (AiCore core : cores) {
+			double dist = space.findShortestDistance(ship.getPosition(), core.getPosition());
+			if (dist < bestDistance) {
+				bestDistance = dist;
+				closestCore = core;
+			}
+		}
+
+		return closestCore;
 	}
 	
 	/*
