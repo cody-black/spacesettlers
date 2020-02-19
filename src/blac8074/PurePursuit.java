@@ -95,7 +95,7 @@ public class PurePursuit {
             }
         }
 
-        // TODO: fix NullPointerException from here when ship is dead, has recently died, or has no path
+        // TODO: fix NullPointerException from here when ship is dead, has recently died, or has no path, or sometimes seemingly randomly
         space.toroidalWrap(lookahead); // just in case
 
         return lookahead;
