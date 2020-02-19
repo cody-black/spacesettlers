@@ -1,13 +1,34 @@
 package blac8074;
 
+import javafx.scene.shape.Circle;
+import spacesettlers.graphics.CircleGraphics;
 import spacesettlers.simulator.Toroidal2DPhysics;
 import spacesettlers.utilities.Position;
 import spacesettlers.utilities.Vector2D;
 
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Vector;
 
+/**
+ * BeePursuit is our implementation of the Pure Pursuit Tracking Algorithm.
+ * This algorithm was invented by the Robotics Institute at Carnegie Mellon
+ * University and can be read about here: 
+ * https://www.ri.cmu.edu/pub_files/pub3/coulter_r_craig_1992_1/coulter_r_craig_1992_1.pdf
+ * 
+ * Pure Pursuit is a simple, quick, and effective way to track a PID controlled 
+ * agent onto a path specified by a series of waypoints. It works by emitting a
+ * circle from the center of the agent and looks for where the circle
+ * intersects with the path. The agent should then treat that intersection point
+ * as an immediate goal (for example, using a PID-controller to locally navigate
+ * towards that goal position).
+ * 
+ * We used Pure Pursuit in this project because it worked well with the existing
+ * PI-controller from the MoveAction and our path finding algorithms returned
+ * a path appropriate for Pure Pursuit.
+ */
 public class BeePursuit {
 
     private List<Position> path;
@@ -16,90 +37,152 @@ public class BeePursuit {
         path = new ArrayList<>();
     }
 
-    public void setPath(ArrayList<BeeNode> newPath) {
+    /**
+     * Set a new path for the BeePursuit to track onto
+     *
+     * @param newPath List of BeeNode's of the path.
+     */
+    public void setPath(List<BeeNode> newPath) {
         path.clear();
         for (BeeNode node : newPath) {
             path.add(node.getPosition());
         }
     }
 
-    public Position getLookaheadPoint(Toroidal2DPhysics space, Position pos, double radius) {
-        Position lookahead = null;
+
+    /**
+     * @param space The Toroidal2DPhysics space to track on.
+     * @param pos The Position of the agent
+     * @param radius The radius of the circle the algorithm uses. See Pure
+     *              Pursuit description above
+     * @return A Position that the agent should immediately head towards.
+     */
+
+    public Position getDesiredPosition(Toroidal2DPhysics space, Position pos, double radius) {
+        
+        // If the path is empty, return agent's position.
+        // We should only return null when this algorithm fails (no intersection
+        // of circle and path).
+        if (path.size() == 0) {
+            return pos;
+        }
+        
+        // Final desired position
+        Position desiredPosition = null;
+        
+        // For future simplification
         double x = pos.getX();
         double y = pos.getY();
 
-        // iterate through all pairs of points
+        // For each pair of points in the path
         for (int i = 0; i < path.size() - 1; i++) {
-            // form a segment from each two adjacent points
-            Position segmentStart = path.get(i);
-            Position segmentEnd = path.get(i + 1);
+            Vector2D startVector = space.findShortestDistanceVector(pos, path.get(i));
+            Vector2D endVector = space.findShortestDistanceVector(pos, path.get(i + 1));
 
-            Vector2D segmentStartVector = space.findShortestDistanceVector(pos, segmentStart);
-            Vector2D segmentEndVector = space.findShortestDistanceVector(pos, segmentEnd);
+            Position[] intersections = getCircleLineIntersections(startVector, endVector, radius);
 
-            // translate the segment to the origin
-            double[] p1 = new double[]{segmentStartVector.getXValue(), segmentStartVector.getYValue()};
-            double[] p2 = new double[]{segmentEndVector.getXValue(), segmentEndVector.getYValue()};
-
-            // calculate an intersection of a segment and a circle with radius r (lookahead) and origin (0, 0)
-            double dx = p2[0] - p1[0];
-            double dy = p2[1] - p1[1];
-            double d = Math.sqrt(dx * dx + dy * dy);
-            double D = p1[0] * p2[1] - p2[0] * p1[1];
-
-            // if the discriminant is zero or the points are equal, there is no intersection
-            double discriminant = radius * radius * d * d - D * D;
-            if (discriminant < 0 || Arrays.equals(p1, p2)) continue;
-
-            // the x components of the intersecting points
-            double x1 = (D * dy + signum(dy) * dx * Math.sqrt(discriminant)) / (d * d);
-            double x2 = (D * dy - signum(dy) * dx * Math.sqrt(discriminant)) / (d * d);
-
-            // the y components of the intersecting points
-            double y1 = (-D * dx + Math.abs(dy) * Math.sqrt(discriminant)) / (d * d);
-            double y2 = (-D * dx - Math.abs(dy) * Math.sqrt(discriminant)) / (d * d);
-
-            // whether each of the intersections are within the segment (and not the entire line)
-            boolean validIntersection1 = Math.min(p1[0], p2[0]) < x1 && x1 < Math.max(p1[0], p2[0])
-                    || Math.min(p1[1], p2[1]) < y1 && y1 < Math.max(p1[1], p2[1]);
-            boolean validIntersection2 = Math.min(p1[0], p2[0]) < x2 && x2 < Math.max(p1[0], p2[0])
-                    || Math.min(p1[1], p2[1]) < y2 && y2 < Math.max(p1[1], p2[1]);
-
-            // remove the old lookahead if either of the points will be selected as the lookahead
-            if (validIntersection1 || validIntersection2) lookahead = null;
-
-            // select the first one if it's valid
-            if (validIntersection1) {
-                lookahead = new Position(x1 + x, y1 + y);
+            // Disaster case (should never happen)
+            if (intersections == null) {
+                continue;
             }
 
-            // select the second one if it's valid and either lookahead is none,
-            // or it's closer to the end of the segment than the first intersection
-            if (validIntersection2) {
-                if (lookahead == null || Math.abs(x1 - p2[0]) > Math.abs(x2 - p2[0]) || Math.abs(y1 - p2[1]) > Math.abs(y2 - p2[1])) {
-                    lookahead = new Position(x2 + x, y2 + y);
+            // Select first if it's not null
+            if (intersections[0] != null) {
+                desiredPosition = new Position(intersections[0].getX() + x, intersections[0].getY() + y);
+            }
+
+            // Select the second intersection if the first one didn't work
+            // or if it is closer to the end (so we always move towards the
+            // end of the path)
+            if (intersections[1] != null) {
+                Position potentialPosition = new Position(intersections[1].getX() + x, intersections[1].getY() + y);
+                if (desiredPosition == null || space.findShortestDistance(potentialPosition, path.get(i+1)) < space.findShortestDistance(desiredPosition, path.get(i+1))) {
+                    desiredPosition = potentialPosition;
                 }
             }
         }
 
-        // special case for the very last point on the path
-        if (path.size() > 0) {
-            Position lastPoint = path.get(path.size() - 1);
-
-            double endX = lastPoint.getX();
-            double endY = lastPoint.getY();
-
-            // if we are closer than lookahead distance to the end, set it as the lookahead
-            if (Math.sqrt((endX - x) * (endX - x) + (endY - y) * (endY - y)) <= radius) {
-                return new Position(endX, endY);
-            }
+        // If last point is closer than the radius, it's a good place to go
+        // but would not be found via the intersections above.
+        Position lastPoint = path.get(path.size() - 1);
+        if (Math.sqrt((lastPoint.getX() - x) * (lastPoint.getX() - x) + (lastPoint.getY() - y) * (lastPoint.getY() - y)) <= radius) {
+            return lastPoint;
         }
 
-        space.toroidalWrap(lookahead); // just in case
+        // Do a final toroidalWrap of our desiredPosition to make sure
+        // that nothing breaks.
+        if (desiredPosition != null) {
+            space.toroidalWrap(desiredPosition);
+        }
 
-        return lookahead;
+        return desiredPosition;
     }
 
+    /**
+     * Calculates the intersection of a line and a circle.
+     * Assumes the circle is at position (0,0).
+     *
+     * @param lineStart Start of the line segment
+     * @param lineEnd End of the line segment
+     * @param radius Radius of the circle
+     * @return Intersection points. Values null if none.
+     */
+    private Position[] getCircleLineIntersections(Vector2D lineStart, Vector2D lineEnd, double radius) {
+
+        // Cant intersect a 0-length segment
+        if (lineStart.equals(lineEnd)) {
+            return null;
+        }
+
+        Position[] intersections = {null, null};
+
+        // More simplification variables
+        double startX = lineStart.getXValue();
+        double startY = lineStart.getYValue();
+        double endX = lineEnd.getXValue();
+        double endY = lineEnd.getYValue();
+        double dx = endX - startX;
+        double dy = endY - startY;
+
+        // Calculations for distance and discriminant
+        double distanceSqr = dx * dx + dy * dy;
+        double determinant = startX * endY - endX * startY;
+
+        // Calculate discriminant. A 0 or negative discriminant means no intersection.
+        double discriminant = radius * radius * distanceSqr - determinant * determinant;
+        if (discriminant <= 0) {
+            return null;
+        }
+
+        // Calculate the intersections points (x1, y1) and (x2, y2) using fancy discriminant math
+        double x1 = (determinant * dy + signum(dy) * dx * Math.sqrt(discriminant)) / distanceSqr;
+        double x2 = (determinant * dy - signum(dy) * dx * Math.sqrt(discriminant)) / distanceSqr;
+        double v = Math.abs(dy) * Math.sqrt(discriminant);
+        double y1 = (-determinant * dx + v) / distanceSqr;
+        double y2 = (-determinant * dx - v) / distanceSqr;
+
+        // Are the intersections actually within the segment and not beyond the segment?
+        boolean intersection1Valid = Math.min(startX, endX) < x1 && x1 < Math.max(startX, endX) || Math.min(startY, endY) < y1 && y1 < Math.max(startY, endY);
+        boolean intersection2Valid = Math.min(startX, endX) < x2 && x2 < Math.max(startX, endX) || Math.min(startY, endY) < y2 && y2 < Math.max(startY, endY);
+
+        if (intersection1Valid) {
+            intersections[0] = new Position(x1, y1);
+        }
+
+        if (intersection2Valid) {
+            intersections[1] = new Position(x2, y2);
+        }
+
+        return intersections;
+    }
+
+
+    /**
+     * Slightly modified version of Math.signum() to change the handling of 0.
+     * 
+     * @param n A double
+     * @return The sign of n with n = 0 returning 1.
+     */
     private double signum(double n) {
         if (n == 0) return 1;
         else return Math.signum(n);
