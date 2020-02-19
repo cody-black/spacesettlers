@@ -1,6 +1,12 @@
 package blac8074;
 
+<<<<<<< HEAD
 import java.util.*;
+=======
+import java.lang.reflect.Array;
+import java.util.*;
+import java.util.Map.Entry;
+>>>>>>> test/noah
 
 import spacesettlers.utilities.Position;
 import spacesettlers.utilities.Vector2D;
@@ -215,6 +221,71 @@ public class BeeGraph {
 			++loopCount;
 		}
 		path.add(nextNode);
+		return path;
+	}
+
+	/*
+	 * Uses hill climbing to find a path from the start node to the goal node
+	 */
+	public ArrayList<BeeNode> getHillClimbingPath(int startIndex, int goalIndex) {
+		unobstructNode(startIndex); // This won't return a path if the start node is obstructed
+
+		BeeNode currentNode = nodes[startIndex];
+		BeeNode goalNode = nodes[goalIndex];
+
+		ArrayList<BeeNode> path = new ArrayList<BeeNode>();
+		double lastHeuristic = Double.POSITIVE_INFINITY;
+
+		int curSteps = 0;
+		int maxSteps = 1000; // Longest distance hill climbing will travel
+
+		while (true) {
+
+			if (curSteps == maxSteps) {
+				break;
+			}
+
+			curSteps++;
+
+			// Get adjacent nodes to our current node
+			Set<BeeNode> adjNodes = currentNode.getAdjacencyMap().keySet();
+
+			double bestHeuristic = Double.POSITIVE_INFINITY;
+			BeeNode bestNode = null;
+
+			for (BeeNode node : adjNodes) {
+				// Is the goal adjacent? Add it to path and stop pathfinding
+				if (node == goalNode) {
+					path.add(goalNode);
+					bestHeuristic = Double.POSITIVE_INFINITY; // to break the while loop
+					break;
+				}
+
+				// Ignore obstructed nodes
+				if (node.getObstructed()) {
+					continue;
+				}
+
+				// Our heuristic function is simple distance
+				double heuristic = this.findDistance(node, goalNode);
+
+				// Is this adjacent node better than the others?
+				if (heuristic < bestHeuristic) {
+					bestHeuristic = heuristic;
+					bestNode = node;
+				}
+			}
+
+			// No longer improving
+			if (bestHeuristic >= lastHeuristic) {
+				break;
+			}
+
+			// We found a good node. Add it to the path and set it as next node to explore.
+			path.add(bestNode);
+			currentNode = bestNode;
+		}
+
 		return path;
 	}
 	
