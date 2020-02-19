@@ -29,7 +29,8 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashMap<AbstractObject, ArrayList<Integer>> obstacleMap;
 	HashSet<SpacewarGraphics> pathGraphics;
 	HashSet<SpacewarGraphics> gridGraphics;
-	PurePursuit pp;
+	UUID lastTargetID = null;
+	BeePursuit pp;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -72,7 +73,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		obstacleMap = new HashMap<AbstractObject, ArrayList<Integer>>();
 		// Store grid graphics so we don't have to re-draw it repeatedly
 		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
-		pp = new PurePursuit();
+		pp = new BeePursuit();
 	}
 
 	@Override
@@ -123,7 +124,24 @@ public class BeehaviorTeamClient extends TeamClient {
 				// Find new path every 20 timesteps
 				if ((space.getCurrentTimestep() % 20) == 0) {
 					pathGraphics.clear();
-					ArrayList<BeeNode> path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(findTarget(ship, space).getPosition()));
+
+					AbstractObject target = findTarget(ship, space);
+
+					ArrayList<BeeNode> pathHC;
+					ArrayList<BeeNode> path;
+
+					if (lastTargetID != target.getId()) {
+						lastTargetID = target.getId();
+						long time1 = System.nanoTime();
+						pathHC = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(target.getPosition()));
+						long time2 = System.nanoTime();
+						path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(target.getPosition()));
+						long time3 = System.nanoTime();
+
+						System.out.printf("%f,%d,%f,%d\n", (time2 - time1) / (1e9), pathHC.size(), (time3 - time2) / (1e9), path.size());
+					} else {
+						path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(target.getPosition()));
+					}
 
 					for (BeeNode node : path) {
 						pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
@@ -138,10 +156,10 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				MoveAction action = new MoveAction(space, ship.getPosition(), goalPos);
 
-				action.setKpRotational(25.0);
-				action.setKvRotational(2.0 * Math.sqrt(25.0));
-				action.setKpTranslational(9.0);
-				action.setKvTranslational(2.2 * Math.sqrt(9.0));
+				action.setKpRotational(40.0);
+				action.setKvRotational(2.0 * Math.sqrt(40.0));
+				action.setKpTranslational(20.0);
+				action.setKvTranslational(2.2 * Math.sqrt(20.0));
 
 				actions.put(actionable.getId(), action);
 			} else {

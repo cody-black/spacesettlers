@@ -8,11 +8,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class PurePursuit {
+public class BeePursuit {
 
     private List<Position> path;
 
-    PurePursuit() {
+    BeePursuit() {
         path = new ArrayList<>();
     }
 

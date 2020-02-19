@@ -232,7 +232,17 @@ public class BeeGraph {
 		ArrayList<BeeNode> path = new ArrayList<BeeNode>();
 		double lastHeuristic = Double.POSITIVE_INFINITY;
 
+		int curSteps = 0;
+		int maxSteps = 1000; // Longest distance hill climbing will travel
+
 		while (true) {
+
+			if (curSteps == maxSteps) {
+				break;
+			}
+
+			curSteps++;
+
 			// Get adjacent nodes to our current node
 			Set<BeeNode> adjNodes = currentNode.getAdjacencyMap().keySet();
 
