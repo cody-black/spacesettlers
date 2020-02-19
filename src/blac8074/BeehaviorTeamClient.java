@@ -1,18 +1,9 @@
 package blac8074;
 
 import java.awt.Color;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
-import spacesettlers.actions.AbstractAction;
-import spacesettlers.actions.DoNothingAction;
-import spacesettlers.actions.MoveAction;
-import spacesettlers.actions.PurchaseCosts;
-import spacesettlers.actions.PurchaseTypes;
+import spacesettlers.actions.*;
 import spacesettlers.clients.TeamClient;
 import spacesettlers.graphics.*;
 import spacesettlers.objects.*;
@@ -23,14 +14,18 @@ import spacesettlers.simulator.Toroidal2DPhysics;
 import spacesettlers.utilities.Position;
 import spacesettlers.utilities.Vector2D;
 
-import blac8074.BeeGraph;
-
-
 public class BeehaviorTeamClient extends TeamClient {
-	BeeGraph graph;
 	// Size of each square in the grid (40 is the max int that works, 10 kinda works but lags, higher/lower values untested)
-	static double GRID_SIZE = 20;
-	HashMap<AbstractObject, ArrayList<Integer>> obstacleMap;
+	static final double GRID_SIZE = 20;
+	// If true, pathfinding will use A*, if false, pathfinding will use other method (hill climbing)
+	static final boolean A_STAR = true;
+	// The ship's path updates every this many timesteps
+	static final int PATH_UPDATE_INTERVAL = 20;
+	// Whether or not to draw graphics for debugging pathfinding
+	static final boolean DEBUG_GRAPHICS = true;
+	
+	BeeGraph graph;
+	
 	HashSet<SpacewarGraphics> pathGraphics;
 	HashSet<SpacewarGraphics> gridGraphics;
 	HashMap<Ship, ArrayList<BeeNode>> paths;
@@ -72,7 +67,6 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		pathGraphics = new HashSet<SpacewarGraphics>();
-		obstacleMap = new HashMap<AbstractObject, ArrayList<Integer>>();
 		// Store grid graphics so we don't have to re-draw it repeatedly
 		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
 		pp = new PurePursuit();
@@ -97,84 +91,64 @@ public class BeehaviorTeamClient extends TeamClient {
 				break;
 			}
 		}
-		if (ship != null) {
-			// Update obstructions of first half of graph on even timesteps
-			if ((space.getCurrentTimestep() & 1) == 0) {
-				findObstructions(ship.getRadius() / 2, space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
-			}
-			// Update obstructions of last half of graph on odd timesteps
-			else {
-				findObstructions(ship.getRadius() / 2, space, ship.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
-			}
+		// Update obstructions of first half of graph on even timesteps
+		if ((space.getCurrentTimestep() & 1) == 0) {
+			findObstructions(ship.getRadius() / 2, space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
 		}
+		// Update obstructions of last half of graph on odd timesteps
 		else {
-			// Update obstructions of first half of graph on even timesteps
-			if ((space.getCurrentTimestep() & 1) == 0) {
-				findObstructions((int)GRID_SIZE / 4, space, null, 0, graph.getSize() / 2 - 1);
-			}
-			// Update obstructions of last half of graph on odd timesteps
-			else {
-				findObstructions((int)GRID_SIZE / 4, space, null, graph.getSize() / 2, graph.getSize() - 1);
-			}
+			findObstructions(ship.getRadius() / 2, space, ship.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
 		}
-		/*
-		// TODO: currently somewhat broken code for obstructing nodes in front of a 
-		// bullet so the ship paths around it
-		for (AbstractWeapon weapon : space.getWeapons()) {
-			Position weaponPos = weapon.getPosition();
-			double weaponPosX = weaponPos.getX();
-			double weaponPosY = weaponPos.getY();
-			double weaponVelX = weaponPos.getxVelocity();
-			double weaponVelY = weaponPos.getyVelocity();
-			for (int i = 0; i < 15; i++) {
-				int nodeIndex = positionToNodeIndex(new Position(weaponPosX + weaponVelX * ((double)i / 5.0), weaponPosY + weaponVelY * ((double)i / 5.0)));
-				graph.obstructNode(nodeIndex);
-			}
-			
-		}
-		*/
 		
 		for (AbstractObject actionable :  actionableObjects) {
-			if (actionable instanceof Ship) {
+			// Assign actions to living ships
+			if ((actionable instanceof Ship) && actionable.isAlive()) {
 				ship = (Ship) actionable;
-				if (ship.isAlive()) {
-					Position currentPosition = ship.getPosition();
-					// Find new path every 20 timesteps
-					if ((space.getCurrentTimestep() % 20) == 0) {
+				Position currentPosition = ship.getPosition();
+				// Find new path every so many timesteps
+				if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
+					ArrayList<BeeNode> path;
+					Position targetPos = findTarget(ship, space).getPosition();
+					// Generate path using selected algorithm
+					if (A_STAR) {
+						path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					}
+					else {
+						path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					}
+					// Create new path graphics
+					if (DEBUG_GRAPHICS) {
 						pathGraphics.clear();
-						ArrayList<BeeNode> path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(findTarget(ship, space).getPosition()));
+						// Add green circles representing nodes on the path
 						for (BeeNode node : path) {
 							pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
 						}
-						paths.put(ship, path);
 					}
-					pp.setPath(paths.get(ship));
-	
-					double radius = GRID_SIZE * 1.5; // starting radius at 1.5 grids away
-					Position goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
-	
-					while (goal == null && radius < 1000) {
-						radius *= 1.25; // expand radius until we find place to go
-						goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
-					}
-	
-					if (radius >= 1000) {
-						System.out.println("wtf where is the path");
-						actions.put(actionable.getId(), new DoNothingAction()); // do nothing i guess
-						continue;
-					}
-					MoveAction action = new MoveAction(space, ship.getPosition(), goal);
-	
-					action.setKpRotational(30.0);
-					action.setKvRotational(2.0 * Math.sqrt(30.0));
-					action.setKpTranslational(16.0);
-					action.setKvTranslational(2.2 * Math.sqrt(16.0));
-	
-					actions.put(actionable.getId(), action);
+					paths.put(ship, path);
 				}
-				else {
-					actions.put(actionable.getId(), new DoNothingAction());
+				pp.setPath(paths.get(ship));
+
+				double radius = GRID_SIZE * 1.5; // starting radius at 1.5 grids away
+				Position goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
+
+				while (goal == null && radius < 1000) {
+					radius *= 1.25; // expand radius until we find place to go
+					goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
 				}
+
+				if (radius >= 1000) {
+					System.out.println("wtf where is the path");
+					actions.put(actionable.getId(), new DoNothingAction()); // do nothing i guess
+					continue;
+				}
+				MoveAction action = new MoveAction(space, ship.getPosition(), goal);
+
+				action.setKpRotational(30.0);
+				action.setKvRotational(2.0 * Math.sqrt(30.0));
+				action.setKpTranslational(16.0);
+				action.setKvTranslational(2.2 * Math.sqrt(16.0));
+
+				actions.put(actionable.getId(), action);
 			}
 			else {
 				actions.put(actionable.getId(), new DoNothingAction());
@@ -190,11 +164,8 @@ public class BeehaviorTeamClient extends TeamClient {
 
 	@Override
 	public Set<SpacewarGraphics> getGraphics() {
-		boolean DEBUG_GRAPHICS = true;
-		
 		HashSet<SpacewarGraphics> graphics = new HashSet<SpacewarGraphics>();
 		if (DEBUG_GRAPHICS) {
-			// TODO: find way(s) to reduce lag when drawing lots of objects
 			// Draw grid on screen
 			graphics.addAll(gridGraphics);
 			// Draw red circles representing each obstructed node
@@ -273,9 +244,11 @@ public class BeehaviorTeamClient extends TeamClient {
 	}
 
 	public void findObstructions(int radius, Toroidal2DPhysics space, String teamName, int startIndex, int stopIndex) {
+		// Check the selected nodes for obstructions
 		for (int nodeIndex = startIndex; nodeIndex <= stopIndex; nodeIndex++) {
 			boolean obstructionFound = false;
 			for (Asteroid asteroid : space.getAsteroids()) {
+				// Check for non-mineable asteroids
 				if (!asteroid.isMineable()) {
 					if (space.findShortestDistanceVector(asteroid.getPosition(), graph.getNode(nodeIndex).getPosition())
 							.getMagnitude() <= (radius + (2 * asteroid.getRadius()))) {
@@ -283,8 +256,8 @@ public class BeehaviorTeamClient extends TeamClient {
 						obstructionFound = true;
 						break;
 					}
+					// Check if asteroid is moving towards the current node
 					if (asteroid.isMoveable()) {
-						// Check if asteroid is moving towards the current node
 						// Note: this may not completely work if the asteroid is moving very fast
 						Position futurePos = new Position(asteroid.getPosition().getX() + asteroid.getPosition().getxVelocity(), 
 								asteroid.getPosition().getY() + asteroid.getPosition().getyVelocity());
@@ -298,6 +271,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 			if (!obstructionFound) {
+				// Check for bases
 				for (Base base : space.getBases()) {
 					if (space.findShortestDistanceVector(base.getPosition(), graph.getNode(nodeIndex).getPosition())
 							.getMagnitude() <= (radius + (2 * base.getRadius()))) {
@@ -308,6 +282,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 			if (!obstructionFound && (teamName != null)) {
+				// Check for enemy ships
 				for (Ship ship : space.getShips()) {
 					if (!ship.getTeamName().equals(teamName)) {
 						if (space.findShortestDistanceVector(ship.getPosition(), graph.getNode(nodeIndex).getPosition())
@@ -319,6 +294,7 @@ public class BeehaviorTeamClient extends TeamClient {
 					}
 				}
 			}
+			// Check for weapon projectiles
 			if (!obstructionFound) {
 				for (AbstractWeapon weapon : space.getWeapons()) {
 					if (space.findShortestDistanceVector(weapon.getPosition(), graph.getNode(nodeIndex).getPosition())
@@ -329,9 +305,7 @@ public class BeehaviorTeamClient extends TeamClient {
 					}
 				}
 			}
-			if (!obstructionFound) {
-				// TODO: Check more object types?
-			}
+			// No obstructions were found for the current node
 			if (!obstructionFound) {
 				graph.unobstructNode(nodeIndex);
 			}
