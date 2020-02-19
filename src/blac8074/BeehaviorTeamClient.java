@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import spacesettlers.actions.AbstractAction;
 import spacesettlers.actions.DoNothingAction;
+import spacesettlers.actions.MoveAction;
 import spacesettlers.actions.PurchaseCosts;
 import spacesettlers.actions.PurchaseTypes;
 import spacesettlers.clients.TeamClient;
@@ -32,6 +33,8 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashMap<AbstractObject, ArrayList<Integer>> obstacleMap;
 	HashSet<SpacewarGraphics> pathGraphics;
 	HashSet<SpacewarGraphics> gridGraphics;
+	HashMap<Ship, ArrayList<BeeNode>> paths;
+	PurePursuit pp;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -72,6 +75,8 @@ public class BeehaviorTeamClient extends TeamClient {
 		obstacleMap = new HashMap<AbstractObject, ArrayList<Integer>>();
 		// Store grid graphics so we don't have to re-draw it repeatedly
 		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
+		pp = new PurePursuit();
+		paths = new HashMap<Ship, ArrayList<BeeNode>>();
 	}
 
 	@Override
@@ -132,20 +137,48 @@ public class BeehaviorTeamClient extends TeamClient {
 		for (AbstractObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
 				ship = (Ship) actionable;
-				Position currentPosition = ship.getPosition();
-				// Find new path every 20 timesteps
-				if ((space.getCurrentTimestep() % 20) == 0) {
-					pathGraphics.clear();
-					ArrayList<BeeNode> path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(findTarget(ship, space).getPosition()));
-					for (BeeNode node : path) {
-						pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+				if (ship.isAlive()) {
+					Position currentPosition = ship.getPosition();
+					// Find new path every 20 timesteps
+					if ((space.getCurrentTimestep() % 20) == 0) {
+						pathGraphics.clear();
+						ArrayList<BeeNode> path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(findTarget(ship, space).getPosition()));
+						for (BeeNode node : path) {
+							pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+						}
+						paths.put(ship, path);
 					}
+					pp.setPath(paths.get(ship));
+	
+					double radius = GRID_SIZE * 1.5; // starting radius at 1.5 grids away
+					Position goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
+	
+					while (goal == null && radius < 1000) {
+						radius *= 1.25; // expand radius until we find place to go
+						goal = pp.getLookaheadPoint(space, ship.getPosition(), radius);
+					}
+	
+					if (radius >= 1000) {
+						System.out.println("wtf where is the path");
+						actions.put(actionable.getId(), new DoNothingAction()); // do nothing i guess
+						continue;
+					}
+					MoveAction action = new MoveAction(space, ship.getPosition(), goal);
+	
+					action.setKpRotational(30.0);
+					action.setKvRotational(2.0 * Math.sqrt(30.0));
+					action.setKpTranslational(16.0);
+					action.setKvTranslational(2.2 * Math.sqrt(16.0));
+	
+					actions.put(actionable.getId(), action);
+				}
+				else {
+					actions.put(actionable.getId(), new DoNothingAction());
 				}
 			}
-		}
-		
-		for (AbstractObject actionable : actionableObjects) {
+			else {
 				actions.put(actionable.getId(), new DoNothingAction());
+			}
 		}
 		return actions;
 	}
@@ -238,22 +271,6 @@ public class BeehaviorTeamClient extends TeamClient {
 		int y = (int)(position.getY() / GRID_SIZE);
 		return x + y * graph.getWidth();
 	}
-	/*
-	private ArrayList<Integer> objectToIndices(AbstractObject obj) {
-		double x = obj.getPosition().getX();
-		double y = obj.getPosition().getY();
-		int radius = obj.getRadius();
-		ArrayList<Integer> indices = new ArrayList<Integer>(4);
-		// TODO: add more based on grid size, ship size?
-		// Get position of corners of a square that contains the object - sometimes overestimates circular object's position
-		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x - radius, y + radius))));
-		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x + radius, y + radius))));
-		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x - radius, y - radius))));
-		indices.add(positionToNodeIndex(graph.toroidalWrap(new Position(x + radius, y - radius))));
-		
-		return indices;
-	}
-	*/
 
 	public void findObstructions(int radius, Toroidal2DPhysics space, String teamName, int startIndex, int stopIndex) {
 		for (int nodeIndex = startIndex; nodeIndex <= stopIndex; nodeIndex++) {
