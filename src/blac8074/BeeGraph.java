@@ -294,7 +294,7 @@ public class BeeGraph {
 	}
 	
 	public int[] findAdjacentIndices(int index) {
-		int[] indices = new int[4];
+		int[] indices = new int[8];
 		int row = index / width;
 		int column = index % width;
 		// Adjacent indices that are to the right
@@ -329,7 +329,7 @@ public class BeeGraph {
 		else {
 			indices[3] = index - width * (height - 1);
 		}
-		/*
+		
 		// Adjacent indices that are up and to the right
 		if (column != (width - 1)) {
 			if (row > 0) {
@@ -398,7 +398,6 @@ public class BeeGraph {
 				indices[7] = index - width * (height - 1) + width - 1;
 			}
 		}
-		*/
 		return indices;
 	}
 }

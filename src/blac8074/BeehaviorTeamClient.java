@@ -20,7 +20,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	// If true, pathfinding will use A*, if false, pathfinding will use other method (hill climbing)
 	static final boolean A_STAR = true;
 	// The ship's path updates every this many timesteps
-	static final int PATH_UPDATE_INTERVAL = 20;
+	static final int PATH_UPDATE_INTERVAL = 10;
 	// Whether or not to draw graphics for debugging pathfinding
 	static final boolean DEBUG_GRAPHICS = true;
 	
@@ -29,7 +29,8 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashSet<SpacewarGraphics> pathGraphics;
 	HashSet<SpacewarGraphics> gridGraphics;
 	HashMap<Ship, ArrayList<BeeNode>> paths;
-	PurePursuit pp;
+	HashSet<SpacewarGraphics> bpGraphics;
+	BeePursuit bp;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -69,8 +70,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		pathGraphics = new HashSet<SpacewarGraphics>();
 		// Store grid graphics so we don't have to re-draw it repeatedly
 		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
-		pp = new PurePursuit();
+		bp = new BeePursuit();
 		paths = new HashMap<Ship, ArrayList<BeeNode>>();
+		bpGraphics = new HashSet<>();
 	}
 
 	@Override
@@ -124,20 +126,44 @@ public class BeehaviorTeamClient extends TeamClient {
 							pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
 						}
 					}
-					pp.setPath(path);
+					bp.setPath(path);
 					paths.put(ship, path);				
 				}
 
-				// Always move based on last path
-				// TODO: Handle multiple agents in the future (multiple PurePursuits)
-				Position goalPos = pp.getLookaheadPoint(space, ship.getPosition(), 1.5 * GRID_SIZE);
+				// Always make a move based on last path
+
+				// TODO: Handle multiple agents in the future (multiple BeePursuits?)
+				double radius = 2.0 * GRID_SIZE;
+				bpGraphics.clear();
+				Position goalPos = bp.getDesiredPosition(space, ship.getPosition(), radius);
+
+				if (goalPos == null) {
+					actions.put(actionable.getId(), new DoNothingAction());
+					continue;
+				}
+
+				// Expand radius if we dont find anything
+				int iters = 0;
+				while (goalPos == null && iters < 20) {
+					iters++;
+					radius *= 1.25;
+					goalPos = bp.getDesiredPosition(space, ship.getPosition(), radius);
+				}
+
+				// If we still couldn't find path
+				if (iters >= 20) {
+					actions.put(actionable.getId(), new DoNothingAction());
+					continue;
+				}
+
+				bpGraphics.add(new TargetGraphics(16, Color.PINK, goalPos));
 
 				MoveAction action = new MoveAction(space, ship.getPosition(), goalPos);
 
-				action.setKpRotational(25.0);
-				action.setKvRotational(2.0 * Math.sqrt(25.0));
-				action.setKpTranslational(9.0);
-				action.setKvTranslational(2.2 * Math.sqrt(9.0));
+				action.setKpRotational(0.0);
+				action.setKvRotational(0.0);
+				action.setKpTranslational(14.0);
+				action.setKvTranslational(2.2 * Math.sqrt(14.0));
 
 				actions.put(actionable.getId(), action);
 			}
@@ -167,6 +193,8 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 			// Add the graphics representing the generated path
 			graphics.addAll(pathGraphics);
+			
+			graphics.addAll(bpGraphics);
 		}
 		return graphics;
 	}
