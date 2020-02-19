@@ -8,10 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import spacesettlers.actions.AbstractAction;
-import spacesettlers.actions.DoNothingAction;
-import spacesettlers.actions.PurchaseCosts;
-import spacesettlers.actions.PurchaseTypes;
+import spacesettlers.actions.*;
 import spacesettlers.clients.TeamClient;
 import spacesettlers.graphics.*;
 import spacesettlers.objects.*;
@@ -32,6 +29,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashMap<AbstractObject, ArrayList<Integer>> obstacleMap;
 	HashSet<SpacewarGraphics> pathGraphics;
 	HashSet<SpacewarGraphics> gridGraphics;
+	PurePursuit pp;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -74,6 +72,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		obstacleMap = new HashMap<AbstractObject, ArrayList<Integer>>();
 		// Store grid graphics so we don't have to re-draw it repeatedly
 		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
+		pp = new PurePursuit();
 	}
 
 	@Override
@@ -124,17 +123,32 @@ public class BeehaviorTeamClient extends TeamClient {
 				// Find new path every 20 timesteps
 				if ((space.getCurrentTimestep() % 20) == 0) {
 					pathGraphics.clear();
-					ArrayList<BeeNode> path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(findTarget(ship, space).getPosition()));
+					ArrayList<BeeNode> path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(findTarget(ship, space).getPosition()));
+
 					for (BeeNode node : path) {
 						pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
 					}
+
+					pp.setPath(path);
 				}
+
+				// Always move based on last path
+				// TODO: Handle multiple agents in the future (multiple PurePursuits)
+				Position goalPos = pp.getLookaheadPoint(space, ship.getPosition(), 1.5 * GRID_SIZE);
+
+				MoveAction action = new MoveAction(space, ship.getPosition(), goalPos);
+
+				action.setKpRotational(25.0);
+				action.setKvRotational(2.0 * Math.sqrt(25.0));
+				action.setKpTranslational(9.0);
+				action.setKvTranslational(2.2 * Math.sqrt(9.0));
+
+				actions.put(actionable.getId(), action);
+			} else {
+				actions.put(actionable.getId(), new DoNothingAction());
 			}
 		}
-		
-		for (AbstractObject actionable : actionableObjects) {
-				actions.put(actionable.getId(), new DoNothingAction());
-		}
+
 		return actions;
 	}
 
