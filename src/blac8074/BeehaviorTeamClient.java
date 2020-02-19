@@ -277,12 +277,23 @@ public class BeehaviorTeamClient extends TeamClient {
 			boolean obstructionFound = false;
 			for (Asteroid asteroid : space.getAsteroids()) {
 				if (!asteroid.isMineable()) {
-					// fixed bug where it only checked radius and not diameter
 					if (space.findShortestDistanceVector(asteroid.getPosition(), graph.getNode(nodeIndex).getPosition())
 							.getMagnitude() <= (radius + (2 * asteroid.getRadius()))) {
 						graph.obstructNode(nodeIndex);
 						obstructionFound = true;
 						break;
+					}
+					if (asteroid.isMoveable()) {
+						// Check if asteroid is moving towards the current node
+						// Note: this may not completely work if the asteroid is moving very fast
+						Position futurePos = new Position(asteroid.getPosition().getX() + asteroid.getPosition().getxVelocity(), 
+								asteroid.getPosition().getY() + asteroid.getPosition().getyVelocity());
+						if (space.findShortestDistanceVector(futurePos, graph.getNode(nodeIndex).getPosition())
+								.getMagnitude() <= (radius + (2 * asteroid.getRadius()))) {
+							graph.obstructNode(nodeIndex);
+							obstructionFound = true;
+							break;
+						}
 					}
 				}
 			}
