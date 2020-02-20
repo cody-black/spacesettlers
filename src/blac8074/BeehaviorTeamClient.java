@@ -29,8 +29,10 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashSet<SpacewarGraphics> pathGraphics;
 	HashSet<SpacewarGraphics> gridGraphics;
 	HashMap<Ship, ArrayList<BeeNode>> paths;
+	HashMap<Ship, AbstractObject> targets;
 	HashSet<SpacewarGraphics> bpGraphics;
 	BeePursuit bp;
+	Ship targetShip;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -73,6 +75,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		bp = new BeePursuit();
 		paths = new HashMap<Ship, ArrayList<BeeNode>>();
 		bpGraphics = new HashSet<>();
+		targets = new HashMap<Ship, AbstractObject>();
 	}
 
 	@Override
@@ -127,7 +130,12 @@ public class BeehaviorTeamClient extends TeamClient {
 					AbstractObject target = findTarget(ship, space);
 					// If we have a valid target
 					if (target != null) {
-						Position targetPos = findTarget(ship, space).getPosition();
+						targets.put(ship, target);
+						Position targetPos = target.getPosition();
+						// Aim ahead of a moving target
+						if (target.isMoveable()) {
+							targetPos = new Position(targetPos.getX() + targetPos.getxVelocity(), targetPos.getY() + targetPos.getyVelocity());
+						}
 						// Generate path using A* algorithm
 						if (A_STAR) {
 							path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
@@ -179,11 +187,41 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 
 				bpGraphics.add(new TargetGraphics(16, Color.PINK, goalPos));
+				
+				targetShip = null;
+				// If we are low on energy or chasing a core, don't find an enemy ship to target
+				if ((ship.getEnergy() > 2000) && !(targets.get(ship) instanceof AiCore)) {
+					double shipDistance = 150.0;
+					// Find the closest enemy ship within a certain distance
+					for (Ship otherShip : space.getShips()) {
+						// If the other ship is an enemy ship
+						if (!otherShip.getTeamName().equals(ship.getTeamName())) {
+							// Get distance without toroidal wrap because toroidal shooting is hard
+							double distance = new Vector2D(currentPosition).subtract(new Vector2D(otherShip.getPosition())).getMagnitude();
+							if (distance < shipDistance) {
+								targetShip = otherShip;
+								shipDistance = distance;
+							}
+						}
+					}
+				}
+				MoveActionWithOrientation action;
+				// If there's no ship to target, don't worry about orientation
+				if (targetShip == null) {
+					action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
+					action.setKpRotational(0.0);
+					action.setKvRotational(0.0);
+				}
+				// If there is an enemy ship to target, point at the enemy ship
+				else {
+					Position targetShipPos = targetShip.getPosition();
+					goalPos.setOrientation(new Vector2D(targetShipPos.getX() - currentPosition.getX(),  
+							targetShipPos.getY() - currentPosition.getY()).getAngle());
+					action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
+					action.setKpRotational(30.0);
+					action.setKvRotational(2 * Math.sqrt(30.0));
+				}
 
-				MoveAction action = new MoveAction(space, ship.getPosition(), goalPos);
-
-				action.setKpRotational(0.0);
-				action.setKvRotational(0.0);
 				action.setKpTranslational(14.0);
 				action.setKvTranslational(2.2 * Math.sqrt(14.0));
 
@@ -227,15 +265,79 @@ public class BeehaviorTeamClient extends TeamClient {
 			Set<AbstractActionableObject> actionableObjects, 
 			ResourcePile resourcesAvailable, 
 			PurchaseCosts purchaseCosts) {
-		// TODO Auto-generated method stub
-		return new HashMap<UUID,PurchaseTypes>();
+
+		HashMap<UUID, PurchaseTypes> purchases = new HashMap<UUID, PurchaseTypes>();
+		double BASE_BUYING_DISTANCE = 400;
+		
+		if (purchaseCosts.canAfford(PurchaseTypes.POWERUP_DOUBLE_MAX_ENERGY, resourcesAvailable)) {
+			for (AbstractActionableObject actionableObject : actionableObjects) {
+				if (actionableObject instanceof Ship) {
+					Ship ship = (Ship) actionableObject;
+					purchases.put(ship.getId(), PurchaseTypes.POWERUP_DOUBLE_MAX_ENERGY);
+				}
+			}
+		}
+		if (purchaseCosts.canAfford(PurchaseTypes.BASE, resourcesAvailable)) {
+			for (AbstractActionableObject actionableObject : actionableObjects) {
+				if (actionableObject instanceof Ship) {
+					Ship ship = (Ship) actionableObject;
+					Set<Base> bases = space.getBases();
+
+					// how far away is this ship to a base of my team?
+					double minDistance = Double.MAX_VALUE;
+					for (Base base : bases) {
+						if (base.getTeamName().equalsIgnoreCase(getTeamName())) {
+							double distance = space.findShortestDistance(ship.getPosition(), base.getPosition());
+							if (distance < minDistance) {
+								minDistance = distance;
+							}
+						}
+					}
+
+					if (minDistance > BASE_BUYING_DISTANCE) {
+						purchases.put(ship.getId(), PurchaseTypes.BASE);
+						//System.out.println("Buying a base!!");
+						break;
+					}
+				}
+			}		
+		}
+		return purchases;
 	}
 
 	@Override
 	public Map<UUID, SpaceSettlersPowerupEnum> getPowerups(Toroidal2DPhysics space,
 			Set<AbstractActionableObject> actionableObjects) {
-		// TODO Auto-generated method stub
-		return null;
+		
+		HashMap<UUID, SpaceSettlersPowerupEnum> powerUps = new HashMap<UUID, SpaceSettlersPowerupEnum>();
+		
+		// If we have a power up for doubling max energy, use it
+		for (AbstractActionableObject actionableObject : actionableObjects) {
+			if (actionableObject instanceof Ship) {
+				Ship ship = (Ship) actionableObject;
+				if (ship.isValidPowerup(SpaceSettlersPowerupEnum.DOUBLE_MAX_ENERGY)) {
+					powerUps.put(ship.getId(), SpaceSettlersPowerupEnum.DOUBLE_MAX_ENERGY);
+				}
+			}
+		}
+		
+		if ((targetShip != null) && ((space.getCurrentTimestep() % 3) == 0)) {
+			for (AbstractActionableObject actionableObject : actionableObjects){
+				if (actionableObject instanceof Ship) {
+					Position shipPos = actionableObject.getPosition();
+					Position targetShipPos = targetShip.getPosition();
+					double delta = actionableObject.getPosition().getOrientation() - new Vector2D(new Position(targetShipPos.getX() - shipPos.getX(),  
+							targetShipPos.getY() - shipPos.getY())).getAngle();
+					delta = (delta + Math.PI) % (2 * Math.PI) - Math.PI;
+					if (Math.abs(delta) < 0.2) {
+						SpaceSettlersPowerupEnum powerup = SpaceSettlersPowerupEnum.FIRE_MISSILE;
+						powerUps.put(actionableObject.getId(), powerup);
+					}
+				}
+			}
+		}
+		
+		return powerUps;
 	}
 	
 	public AbstractObject findTarget(Ship ship, Toroidal2DPhysics space) {
@@ -254,8 +356,16 @@ public class BeehaviorTeamClient extends TeamClient {
 			if (core != null) {
 				return core;
 			}
-			// There isn't a core -> continue getting beacons
+			// There isn't a core -> 
 			else {
+				// The ship is a little heavy (lots of resources) -> return to base
+				if (ship.getMass() > 350) {
+					Base base = pickNearestFriendlyBase(space, ship);
+					if (base != null) {
+						return base;
+					}
+				}
+				// continue getting beacons
 				Beacon beacon = pickNearestBeacon(space, ship);
 				if (beacon != null) {
 					return beacon;
@@ -265,7 +375,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		// Return core to base
 		else {
 			AiCore core = pickNearestFreeCore(space, ship);
-			// There is another core but we are low on energy -> go to base
+			// There isn't another core or there is another core but we are low on energy -> go to base
 			if ((core == null) || (ship.getEnergy() < 2000)) {
 				Base base = pickNearestFriendlyBase(space, ship);
 				if (base != null) {
@@ -401,9 +511,9 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 			if (!obstructionFound && (teamName != null)) {
-				// Check for enemy ships
+				// Check for living enemy ships
 				for (Ship ship : space.getShips()) {
-					if (!ship.getTeamName().equals(teamName)) {
+					if (!ship.getTeamName().equals(teamName) && ship.isAlive()) {
 						if (space.findShortestDistanceVector(ship.getPosition(), graph.getNode(nodeIndex).getPosition())
 								.getMagnitude() <= (radius + (2 * ship.getRadius()))) {
 							graph.obstructNode(nodeIndex);
