@@ -181,11 +181,6 @@ public class BeehaviorTeamClient extends TeamClient {
 				bpGraphics.clear();
 				Position goalPos = bp.getDesiredPosition(space, ship.getPosition(), radius);
 
-				if (goalPos == null) {
-					actions.put(actionable.getId(), new DoNothingAction());
-					continue;
-				}
-
 				// Expand radius if we dont find anything
 				int iters = 0;
 				while (goalPos == null && iters < 20) {
