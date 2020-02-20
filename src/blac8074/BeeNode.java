@@ -3,6 +3,12 @@ package blac8074;
 import java.util.HashMap;
 
 import spacesettlers.utilities.*;
+/**
+ * A BeeNode represents a node on a BeeGraph
+ *
+ * Each node keeps track of its adjacent nodes and the edge costs between itself and its adjacent nodes
+ * Each node also has a Position that corresponds to its location in space
+ */
 
 public class BeeNode implements Comparable<BeeNode>{
 	private Position position;

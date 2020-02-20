@@ -14,6 +14,12 @@ import spacesettlers.simulator.Toroidal2DPhysics;
 import spacesettlers.utilities.Position;
 import spacesettlers.utilities.Vector2D;
 
+/**
+ * A single ship team that stays buzzy by collecting beacons and cores and shooting at nearby enemies
+ * If it happens to accidently collect resources, it buys new bases and energy upgrades
+ * 
+ */
+
 public class BeehaviorTeamClient extends TeamClient {
 	// Size of each square in the grid (40 is the max int that works, 10 kinda works but lags, higher/lower values untested)
 	static final double GRID_SIZE = 20;
@@ -24,14 +30,22 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Whether or not to draw graphics for debugging pathfinding
 	static final boolean DEBUG_GRAPHICS = true;
 	
+	// Graph to store nodes that represent the environment
 	BeeGraph graph;
 	
+	//For storing path graphics so we only have to create them when a new path is generated
 	HashSet<SpacewarGraphics> pathGraphics;
+	// Store grid graphics so we don't have to re-draw it repeatedly
 	HashSet<SpacewarGraphics> gridGraphics;
+	// Intended to store the paths of multiple ships, more useful for future projects
 	HashMap<Ship, ArrayList<BeeNode>> paths;
+	// Keeps track of targets that each ship is assigned to, more useful with multiple ships
 	HashMap<Ship, AbstractObject> targets;
+	// Stores bee pursuit graphics
 	HashSet<SpacewarGraphics> bpGraphics;
+	// Bee Pursuit - used to move along paths
 	BeePursuit bp;
+	// Ship that is being targeted - used so we know which ship we're shooting at
 	Ship targetShip;
 	
 	@Override
@@ -70,7 +84,6 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		pathGraphics = new HashSet<SpacewarGraphics>();
-		// Store grid graphics so we don't have to re-draw it repeatedly
 		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
 		bp = new BeePursuit();
 		paths = new HashMap<Ship, ArrayList<BeeNode>>();
@@ -135,6 +148,7 @@ public class BeehaviorTeamClient extends TeamClient {
 						// Aim ahead of a moving target
 						if (target.isMoveable()) {
 							targetPos = new Position(targetPos.getX() + targetPos.getxVelocity(), targetPos.getY() + targetPos.getyVelocity());
+							space.toroidalWrap(targetPos);
 						}
 						// Generate path using A* algorithm
 						if (A_STAR) {
@@ -186,6 +200,7 @@ public class BeehaviorTeamClient extends TeamClient {
 					continue;
 				}
 
+				// Add a target graphic at our goal position
 				bpGraphics.add(new TargetGraphics(16, Color.PINK, goalPos));
 				
 				targetShip = null;
@@ -253,7 +268,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 			// Add the graphics representing the generated path
 			graphics.addAll(pathGraphics);
-			
+			// Add graphics showing where on the path we are aiming
 			graphics.addAll(bpGraphics);
 		}
 		return graphics;
@@ -269,6 +284,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		HashMap<UUID, PurchaseTypes> purchases = new HashMap<UUID, PurchaseTypes>();
 		double BASE_BUYING_DISTANCE = 400;
 		
+		// Buy a double max energy powerup if we can afford it
 		if (purchaseCosts.canAfford(PurchaseTypes.POWERUP_DOUBLE_MAX_ENERGY, resourcesAvailable)) {
 			for (AbstractActionableObject actionableObject : actionableObjects) {
 				if (actionableObject instanceof Ship) {
@@ -277,6 +293,8 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 		}
+		
+		// Buy a new base if we can afford it
 		if (purchaseCosts.canAfford(PurchaseTypes.BASE, resourcesAvailable)) {
 			for (AbstractActionableObject actionableObject : actionableObjects) {
 				if (actionableObject instanceof Ship) {
@@ -293,7 +311,7 @@ public class BeehaviorTeamClient extends TeamClient {
 							}
 						}
 					}
-
+					// Only buy a base if it's far enough from existing bases
 					if (minDistance > BASE_BUYING_DISTANCE) {
 						purchases.put(ship.getId(), PurchaseTypes.BASE);
 						//System.out.println("Buying a base!!");
@@ -321,15 +339,18 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		
+		// Potentially fire every 3 timesteps
 		if ((targetShip != null) && ((space.getCurrentTimestep() % 3) == 0)) {
 			for (AbstractActionableObject actionableObject : actionableObjects){
 				if (actionableObject instanceof Ship) {
 					Position shipPos = actionableObject.getPosition();
 					Position targetShipPos = targetShip.getPosition();
-					double delta = actionableObject.getPosition().getOrientation() - new Vector2D(new Position(targetShipPos.getX() - shipPos.getX(),  
+					// Calculate the difference between the ship's current orientation and the orientation it needs to face the targeted ship
+					double angleDiff = actionableObject.getPosition().getOrientation() - new Vector2D(new Position(targetShipPos.getX() - shipPos.getX(),  
 							targetShipPos.getY() - shipPos.getY())).getAngle();
-					delta = (delta + Math.PI) % (2 * Math.PI) - Math.PI;
-					if (Math.abs(delta) < 0.2) {
+					angleDiff = (angleDiff + Math.PI) % (2 * Math.PI) - Math.PI;
+					// If the ship is basically pointing at the targeted ship, fire missiles
+					if (Math.abs(angleDiff) < 0.2) {
 						SpaceSettlersPowerupEnum powerup = SpaceSettlersPowerupEnum.FIRE_MISSILE;
 						powerUps.put(actionableObject.getId(), powerup);
 					}
@@ -340,6 +361,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return powerUps;
 	}
 	
+	/*
+	 * Find what object the ship should aim for
+	 */
 	public AbstractObject findTarget(Ship ship, Toroidal2DPhysics space) {
 		AbstractObject targetObj = null;
 		// We are low on energy -> go get a beacon
@@ -351,7 +375,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		// We don't have a core -> check for cores
 		if (ship.getNumCores() == 0) {
-			AiCore core = pickNearestFreeCore(space, ship);
+			AiCore core = pickNearestCore(space, ship);
 			// There is a core -> go get it
 			if (core != null) {
 				return core;
@@ -374,7 +398,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		} 
 		// Return core to base
 		else {
-			AiCore core = pickNearestFreeCore(space, ship);
+			AiCore core = pickNearestCore(space, ship);
 			// There isn't another core or there is another core but we are low on energy -> go to base
 			if ((core == null) || (ship.getEnergy() < 2000)) {
 				Base base = pickNearestFriendlyBase(space, ship);
@@ -390,6 +414,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return targetObj;
 	}
 	
+	/*
+	 * Find the nearest beacon
+	 */
 	private Beacon pickNearestBeacon(Toroidal2DPhysics space, Ship ship) {
 		// get the current beacons
 		Set<Beacon> beacons = space.getBeacons();
@@ -407,14 +434,17 @@ public class BeehaviorTeamClient extends TeamClient {
 		return closestBeacon;
 	}
 	
+	/*
+	 * Find the nearest friendly base
+	 */
 	private Base pickNearestFriendlyBase(Toroidal2DPhysics space, Ship ship) {
-		// get the current beacons
 		Set<Base> bases = space.getBases();
 
 		Base closestBase = null;
 		double bestDistance = Double.POSITIVE_INFINITY;
 
 		for (Base base : bases) {
+			// Check if the base belongs to our team
 			if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
 				double dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
 				if (dist < bestDistance) {
@@ -426,7 +456,10 @@ public class BeehaviorTeamClient extends TeamClient {
 		return closestBase;
 	}
 	
-	private AiCore pickNearestFreeCore(Toroidal2DPhysics space, Ship ship) {
+	/*
+	 * Find the nearest AiCore
+	 */
+	private AiCore pickNearestCore(Toroidal2DPhysics space, Ship ship) {
 		Set<AiCore> cores = space.getCores();
 
 		AiCore closestCore = null;
@@ -472,6 +505,13 @@ public class BeehaviorTeamClient extends TeamClient {
 		return x + y * graph.getWidth();
 	}
 
+	/*
+	 * Check each grid square to see if it contains an obstacle or is near enough to an obstacle
+	 * If it is, obstruct the corresponding node
+	 * If not, unobstruct the corresponding node
+	 * 
+	 * Obstacles currently include: non-mineable asteroids, bases, enemy ships, weapon projectiles
+	 */
 	public void findObstructions(int radius, Toroidal2DPhysics space, String teamName, int startIndex, int stopIndex) {
 		// Check the selected nodes for obstructions
 		for (int nodeIndex = startIndex; nodeIndex <= stopIndex; nodeIndex++) {

@@ -5,6 +5,12 @@ import java.util.*;
 import spacesettlers.utilities.Position;
 import spacesettlers.utilities.Vector2D;
 
+/**
+ * The BeeGraph stores and performs operations on BeeNodes
+ * 
+ *
+ */
+
 public class BeeGraph {
 
 	private BeeNode[] nodes;
@@ -152,28 +158,34 @@ public class BeeGraph {
 	public ArrayList<BeeNode> getAStarPath(int startIndex, int goalIndex) {
 		unobstructNode(startIndex); // This won't return a path if the start node is obstructed
 		// Yes, the start and goal nodes are switched
-		// Otherwise the path ArrayList would have to be reversed from start -> goal
-		// since this actually returns the path from goal -> start
+		// Otherwise the path ArrayList would have to be reversed
 		BeeNode startNode = nodes[goalIndex];
 		BeeNode goalNode = nodes[startIndex];
+		
 		HashSet<BeeNode> closed = new HashSet<BeeNode>();
 		PriorityQueue<BeeNode> frontier = new PriorityQueue<BeeNode>();
 		ArrayList<BeeNode> path = new ArrayList<BeeNode>();
-		int loopCount = 0;
-		int MAX_LOOPS = 1000;
-		BeeNode nextNode;
+		
+		// Stores the current minimum cost at the specified node
 		HashMap<BeeNode, Double> costAtNode = new HashMap<BeeNode, Double>();
-		double cost;
+		// Stores the parent of each node in the form childNode, parentNode
 		HashMap<BeeNode, BeeNode> parentMap = new HashMap<BeeNode, BeeNode>();
+		
 		parentMap.put(startNode, null);
 		costAtNode.put(startNode, 0.0);
+		
+		// Put all children of the start node into the frontier
 		for (BeeNode adjNode : startNode.getAdjacencyMap().keySet()) {
-			cost = startNode.getEdgeCost(adjNode);
+			double cost = startNode.getEdgeCost(adjNode);
 			costAtNode.put(adjNode, cost);
 			adjNode.setPriority(cost + this.findDistance(adjNode, goalNode));
 			frontier.add(adjNode);
 			parentMap.put(adjNode, startNode);
 		}
+		
+		int loopCount = 0;
+		int MAX_LOOPS = 1000;
+		
 		while (true) {
 			if (frontier.isEmpty()) {
 				break;
@@ -182,14 +194,14 @@ public class BeeGraph {
 				// System.out.println("A* pathfinding timed out");
 				return path;
 			}
-			nextNode = frontier.poll();
+			BeeNode nextNode = frontier.poll();
 			if (nextNode == goalNode) {
 				break;
 			}
 			if (!closed.contains(nextNode)) {
 				closed.add(nextNode);
 				for (BeeNode adjNode : nextNode.getAdjacencyMap().keySet()) {
-					cost = costAtNode.get(nextNode) + nextNode.getEdgeCost(adjNode);
+					double cost = costAtNode.get(nextNode) + nextNode.getEdgeCost(adjNode);
 					if ((!costAtNode.containsKey(adjNode)) || cost < costAtNode.get(adjNode)) {
 						if (!closed.contains(adjNode)) {
 							costAtNode.put(adjNode, cost);
@@ -202,19 +214,20 @@ public class BeeGraph {
 			}
 			++loopCount;
 		}
-		loopCount = 0;
+		
 		// Find path from goal to root of tree
-		nextNode = goalNode;
-		while (nextNode != startNode) {
+		BeeNode parentNode = goalNode;
+		loopCount = 0;
+		while (parentNode != startNode) {
 			if (loopCount == MAX_LOOPS) {
 				// System.out.println("A* pathfinding timed out");
 				return path;
 			}
-			path.add(nextNode);
-			nextNode = parentMap.get(nextNode);
+			path.add(parentNode);
+			parentNode = parentMap.get(parentNode);
 			++loopCount;
 		}
-		path.add(nextNode);
+		path.add(parentNode);
 		return path;
 	}
 	
