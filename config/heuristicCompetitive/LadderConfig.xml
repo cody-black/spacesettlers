@@ -30,18 +30,18 @@
 			<initialRegionLRX>1024</initialRegionLRX>
 			<initialRegionLRY>600</initialRegionLRY>
 		</HighLevelTeamConfig>
+		<HighLevelTeamConfig>
+			<teamName>HeuristicMinerTeam</teamName>
+			<configFile>aggressive-heuristic-clientinit.xml</configFile>
+		</HighLevelTeamConfig>
 	</staticTeams>
 
 	<!-- The list of variable clients/teams.  Each will participate in numRepeatMatches but against 
 		 each other and the static teams. -->
 	<variableTeams>
 		<HighLevelTeamConfig>
-			<teamName>HeuristicMinerTeam</teamName>
-			<configFile>aggressive-heuristic-clientinit.xml</configFile>
-		</HighLevelTeamConfig>
-		<HighLevelTeamConfig>
-			<teamName>AmyTeam</teamName>
-			<configFile>amy-spacesettlersinit.xml</configFile>
+			<teamName>Bee 🐝havior (Black and Zemlin)</teamName>
+			<configFile>bee-clientinit.xml</configFile>
 		</HighLevelTeamConfig>
 	</variableTeams>
 
