@@ -28,7 +28,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	// The ship's path updates every this many timesteps
 	static final int PATH_UPDATE_INTERVAL = 10;
 	// Whether or not to draw graphics for debugging pathfinding
-	static final boolean DEBUG_GRAPHICS = true;
+	static final boolean DEBUG_GRAPHICS = false;
 	
 	// Graph to store nodes that represent the environment
 	BeeGraph graph;
@@ -54,8 +54,10 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Which bee are we lookin at
 	BeeChromosome currBee;
 	// Number of ticks to evaulate a bee
-	int numBeeEvalTicks = 1000;
+	int numBeeEvalTicks = 125;
 	int currBeeEvalTicks = 0;
+	float curScore = 0;
+	double lastEnergy = -10000;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -99,7 +101,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
 
-		bees = new BeePopulation(32);
+		bees = new BeePopulation(40);
 	}
 
 	@Override
@@ -114,15 +116,26 @@ public class BeehaviorTeamClient extends TeamClient {
 		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();		
 		// TODO: is there some other way to get our team name other than from a ship?
 		Ship ship = null;
-		for (AbstractObject actionable :  actionableObjects) {
+		for (AbstractActionableObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
 				ship = (Ship) actionable;
+
+				if (lastEnergy != -10000) {
+					double deltaDmg = ship.getEnergy() - lastEnergy;
+					lastEnergy = ship.getEnergy();
+
+					curScore += deltaDmg / 10;
+				} else {
+					lastEnergy = ship.getEnergy();
+				}
+
 				break;
 			}
 		}
 
 		if (currBeeEvalTicks % numBeeEvalTicks == 0) {
-			currBee = bees.getNextBee();
+			currBee = bees.getNextBee(curScore);
+			curScore = 0;
 		}
 
 		currBeeEvalTicks++;
@@ -253,6 +266,8 @@ public class BeehaviorTeamClient extends TeamClient {
 				action.setKpTranslational(currBee.pGainVel);
 				action.setKvTranslational(currBee.dGainVel);
 
+				curScore += ship.getPosition().getTranslationalVelocity().getMagnitude() / 100f;
+
 				actions.put(actionable.getId(), action);
 			}
 			else {
@@ -264,7 +279,6 @@ public class BeehaviorTeamClient extends TeamClient {
 
 	@Override
 	public void getMovementEnd(Toroidal2DPhysics space, Set<AbstractActionableObject> actionableObjects) {
-
 	}
 
 	@Override

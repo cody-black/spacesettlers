@@ -19,4 +19,9 @@ public class BeeChromosome {
         this.pGainVel = mommy.pGainVel;
         this.dGainVel = daddy.dGainVel;
     }
+
+    public void mutate() {
+        this.pGainVel += Math.random() - 0.5;
+        this.dGainVel += Math.random() - 0.5;
+    }
 }
