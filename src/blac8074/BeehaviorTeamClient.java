@@ -47,6 +47,15 @@ public class BeehaviorTeamClient extends TeamClient {
 	BeePursuit bp;
 	// Ship that is being targeted - used so we know which ship we're shooting at
 	Ship targetShip;
+
+
+	// The Bees!
+	BeePopulation bees;
+	// Which bee are we lookin at
+	BeeChromosome currBee;
+	// Number of ticks to evaulate a bee
+	int numBeeEvalTicks = 1000;
+	int currBeeEvalTicks = 0;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -89,6 +98,8 @@ public class BeehaviorTeamClient extends TeamClient {
 		paths = new HashMap<Ship, ArrayList<BeeNode>>();
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
+
+		bees = new BeePopulation(32);
 	}
 
 	@Override
@@ -109,6 +120,13 @@ public class BeehaviorTeamClient extends TeamClient {
 				break;
 			}
 		}
+
+		if (currBeeEvalTicks % numBeeEvalTicks == 0) {
+			currBee = bees.getNextBee();
+		}
+
+		currBeeEvalTicks++;
+
 		// Update obstructions frequently to make the debug graphics more responsive
 		if (DEBUG_GRAPHICS) {
 			// Update obstructions of first half of graph on even timesteps
@@ -232,8 +250,8 @@ public class BeehaviorTeamClient extends TeamClient {
 					action.setKvRotational(2 * Math.sqrt(30.0));
 				}
 
-				action.setKpTranslational(14.0);
-				action.setKvTranslational(2.2 * Math.sqrt(14.0));
+				action.setKpTranslational(currBee.pGainVel);
+				action.setKvTranslational(currBee.dGainVel);
 
 				actions.put(actionable.getId(), action);
 			}
