@@ -5,7 +5,7 @@
 	<width>1600</width>
 	
 	<!-- Number of steps of simulation -->
-	<simulationSteps>20000</simulationSteps>
+	<simulationSteps>500000</simulationSteps>
 
 	<!-- Timestep for a simulation (in seconds for the physics equations) -->
 	<simulationTimeStep>0.05</simulationTimeStep>
@@ -21,7 +21,7 @@
 	<numBeacons>6</numBeacons>
 	
 	<!-- Specify the maximum number of ships in a team -->
-	<maximumShipsPerTeam>2</maximumShipsPerTeam>
+	<maximumShipsPerTeam>1</maximumShipsPerTeam>
 	<maximumInitialShipsPerTeam>1</maximumInitialShipsPerTeam>
 	
 	<!-- Specify any controllable clients in the simulator (this can include heuristics).  

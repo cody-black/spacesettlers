@@ -16,8 +16,13 @@ public class BeeChromosome {
     When two bees love each other very much
      */
     public BeeChromosome(BeeChromosome mommy, BeeChromosome daddy) {
-        this.pGainVel = mommy.pGainVel;
-        this.dGainVel = daddy.dGainVel;
+        if (Math.random() < 0.5) {
+            this.pGainVel = mommy.pGainVel;
+            this.dGainVel = daddy.dGainVel;
+        } else {
+            this.pGainVel = daddy.pGainVel;
+            this.dGainVel = mommy.dGainVel;
+        }
     }
 
     public void mutate() {

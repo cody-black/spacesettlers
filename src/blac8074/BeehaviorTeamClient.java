@@ -54,10 +54,10 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Which bee are we lookin at
 	BeeChromosome currBee;
 	// Number of ticks to evaulate a bee
-	int numBeeEvalTicks = 125;
+	int numBeeEvalTicks = 250;
 	int currBeeEvalTicks = 0;
 	float curScore = 0;
-	double lastEnergy = -10000;
+	double lastDamage = 0;
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -101,7 +101,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
 
-		bees = new BeePopulation(40);
+		bees = new BeePopulation(80);
 	}
 
 	@Override
@@ -120,15 +120,10 @@ public class BeehaviorTeamClient extends TeamClient {
 			if (actionable instanceof Ship) {
 				ship = (Ship) actionable;
 
-				if (lastEnergy != -10000) {
-					double deltaDmg = ship.getEnergy() - lastEnergy;
-					lastEnergy = ship.getEnergy();
+				double deltaDmg = ship.getDamageReceived() - lastDamage;
+				lastDamage = ship.getDamageReceived();
 
-					curScore += deltaDmg / 10;
-				} else {
-					lastEnergy = ship.getEnergy();
-				}
-
+				curScore += deltaDmg / 2;
 				break;
 			}
 		}

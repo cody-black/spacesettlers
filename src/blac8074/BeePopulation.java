@@ -1,7 +1,6 @@
 package blac8074;
 
-import java.util.Arrays;
-import java.util.Comparator;
+import java.util.*;
 
 class Bee {
     BeeChromosome chromosome;
@@ -12,6 +11,7 @@ public class BeePopulation {
 
     private final float ELITE_RATIO = 0.3f;
     private final float MUTATION_RATE = 0.05f; // Percent of chromosomes that are mutated each generation
+    private final int TOURNAMENT_SIZE = 10;
 
     private int populationSize;
     private Bee[] bees;
@@ -42,29 +42,46 @@ public class BeePopulation {
                 // Sort reverse score order
                 Arrays.sort(bees, (bee1, bee2) -> (Float.compare(bee2.score, bee1.score)));
 
+                List<Bee> beeList = Arrays.asList(bees);
+
                 System.out.println("Best Score " + bees[0].score);
                 System.out.println("P: " + bees[0].chromosome.pGainVel + ", D: " + bees[0].chromosome.dGainVel);
 
+                // Selection (Tournament)
+                Bee[] newBees = new Bee[populationSize];
 
-                // Crossover (By replacing bottom 1-ELITE_RATIO percentile bees)
+                for (int i=0; i < populationSize * ELITE_RATIO; i++) {
+                    Collections.shuffle(beeList);
 
+                    Bee bestBee = beeList.get(0);
+                    for (int j=1; j<TOURNAMENT_SIZE; j++) {
+                        if (beeList.get(j).score > bestBee.score) {
+                            bestBee = beeList.get(j);
+                        }
+                    }
+
+                    newBees[i] = bestBee;
+                }
+
+                // Crossover
                 for (int i=(int)(populationSize * ELITE_RATIO); i < populationSize; i++) {
                     // TODO: bees can self breed??
-                    Bee bee1 = bees[(int)(Math.random() * ELITE_RATIO * populationSize)];
-                    Bee bee2 = bees[(int)(Math.random() * ELITE_RATIO * populationSize)];
+                    Bee bee1 = newBees[(int)(Math.random() * ELITE_RATIO * populationSize)];
+                    Bee bee2 = newBees[(int)(Math.random() * ELITE_RATIO * populationSize)];
 
-                    bees[i] = new Bee();
-                    bees[i].chromosome = new BeeChromosome(bee1.chromosome, bee2.chromosome);
+                    newBees[i] = new Bee();
+                    newBees[i].chromosome = new BeeChromosome(bee1.chromosome, bee2.chromosome);
                     if (Math.random() < MUTATION_RATE) {
-                        bees[i].chromosome.mutate();
+                        newBees[i].chromosome.mutate();
                     }
-                    bees[i].score = 0;
                 }
 
                 // Reset scores
-                for (Bee bee : bees) {
+                for (Bee bee : newBees) {
                     bee.score = 0;
                 }
+
+                bees = newBees;
             } else {
                 currBee++;
             }
