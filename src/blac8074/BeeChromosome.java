@@ -25,8 +25,24 @@ public class BeeChromosome {
         }
     }
 
-    public void mutate() {
+    public BeeChromosome() {
+    	
+	}
+
+	public void mutate() {
         this.pGainVel += Math.random() - 0.5;
         this.dGainVel += Math.random() - 0.5;
+    }
+    
+    /*
+     * Returns a String containing the values of the genes of the chromosome, seperated by commas
+     */
+    public String toString() {
+    	String values = "";
+    	values += Float.toString(pGainVel) + ",";
+    	values += Float.toString(dGainVel) + ",";
+    	// Add more as we add more genes
+    	// values += ... + ","
+    	return values;
     }
 }

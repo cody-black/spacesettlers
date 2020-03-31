@@ -1,7 +1,15 @@
 package blac8074;
 
 import java.awt.Color;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 import spacesettlers.actions.*;
 import spacesettlers.clients.TeamClient;
@@ -59,8 +67,88 @@ public class BeehaviorTeamClient extends TeamClient {
 	float curScore = 0;
 	double lastDamage = 0;
 	
+	// Number of bees in each generation
+	int generationSize = 25;
+	// Current generation number
+	int currGen = 0;
+	// Number of the current individual
+	int individualNum;
+	// Stats for the current bee
+	String[] beeData;
+	// Path to the file for the current generation
+	String genFilePath;
+	// Path to the file keeping track of the individual number
+	// TODO: is there some way to set the contents of the file to "0" when the ladder starts?
+	String individualNumPath;
+	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
+		individualNumPath = "blac8074/individualNumber.csv";
+		BufferedReader fileIn = null;
+		BufferedWriter fileOut = null;
+		try {
+			// Get the number of the current individual
+			fileIn = new BufferedReader(new FileReader(individualNumPath));
+			individualNum = Integer.parseInt(fileIn.readLine());
+			fileIn.close();
+			
+			// Update individual number in data file
+			fileOut = new BufferedWriter(new FileWriter(individualNumPath));
+			fileOut.write(Integer.toString(individualNum + 1));
+			fileOut.close();
+			
+			// Calculate current generation
+			currGen = individualNum / generationSize;
+			
+			// Path to file that contains (or will contain) info for current generation
+			genFilePath = "blac8074/gen" + currGen +".csv";
+			
+			// If it is time for a new generation
+			if ((individualNum % generationSize) == 0) {
+				// Create new generation
+				if (currGen == 0) {
+					// Create initial random generation
+					bees = new BeePopulation(generationSize);
+				}
+				else {
+					// Create generation based on previous generation
+					Bee[] beeArr = new Bee[generationSize];
+					fileIn = new BufferedReader(new FileReader("blac8074/gen" + (currGen - 1) + ".csv"));
+					for (int i = 0; i < generationSize; i++) {
+						String line = fileIn.readLine();
+						beeData = line.split(",");
+						beeArr[i] = new Bee();
+						beeArr[i].chromosome = new BeeChromosome();
+						beeArr[i].chromosome.pGainVel = Float.parseFloat(beeData[0]);
+						beeArr[i].chromosome.dGainVel = Float.parseFloat(beeData[1]);
+						beeArr[i].score = Float.parseFloat(beeData[beeData.length - 1]);
+					}
+					fileIn.close();
+					bees = new BeePopulation(beeArr);
+					bees.evolve();
+				}
+				// Save new generation to file
+				new File(genFilePath).createNewFile();
+				fileOut = new BufferedWriter(new FileWriter(genFilePath));
+				fileOut.write(bees.toString());
+				fileOut.close();
+			}
+	
+			// Read data for current individual
+			fileIn = new BufferedReader(new FileReader(genFilePath));
+			int currLineNum = 0;
+			String currLine = "";
+			while (currLineNum <= (individualNum % generationSize)) {
+				currLine = fileIn.readLine();
+				++currLineNum;
+			}
+			fileIn.close();
+			beeData = currLine.split(",");
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+		
 		// Number of grid squares in x dimension
 		int numSquaresX = space.getWidth() / (int)GRID_SIZE;
 		// Number of grid squares in y dimension
@@ -101,13 +189,21 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
 
-		bees = new BeePopulation(80);
+		//bees = new BeePopulation(80);
+		//currBee = bees.getNextBee(curScore);
 	}
 
 	@Override
 	public void shutDown(Toroidal2DPhysics space) {
-		// TODO Auto-generated method stub
-
+		try {
+			// Write score for individual to generation file
+			List<String> lines = new ArrayList<>(Files.readAllLines(Paths.get(genFilePath)));
+			lines.set(individualNum % generationSize, lines.get(individualNum % generationSize) + curScore);
+			Files.write(Paths.get(genFilePath), lines);
+		} 
+		catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Override
@@ -127,13 +223,15 @@ public class BeehaviorTeamClient extends TeamClient {
 				break;
 			}
 		}
-
+		
+		/*
 		if (currBeeEvalTicks % numBeeEvalTicks == 0) {
 			currBee = bees.getNextBee(curScore);
 			curScore = 0;
 		}
 
 		currBeeEvalTicks++;
+		*/
 
 		// Update obstructions frequently to make the debug graphics more responsive
 		if (DEBUG_GRAPHICS) {
@@ -258,8 +356,8 @@ public class BeehaviorTeamClient extends TeamClient {
 					action.setKvRotational(2 * Math.sqrt(30.0));
 				}
 
-				action.setKpTranslational(currBee.pGainVel);
-				action.setKvTranslational(currBee.dGainVel);
+				action.setKpTranslational(Float.parseFloat(beeData[0]));
+				action.setKvTranslational(Float.parseFloat(beeData[1]));
 
 				curScore += ship.getPosition().getTranslationalVelocity().getMagnitude() / 100f;
 
