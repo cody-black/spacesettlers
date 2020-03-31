@@ -68,7 +68,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	double lastDamage = 0;
 	
 	// Number of bees in each generation
-	int generationSize = 25;
+	int generationSize = 100;
 	// Current generation number
 	int currGen = 0;
 	// Number of the current individual
@@ -83,7 +83,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
-		individualNumPath = "blac8074/individualNumber.csv";
+		individualNumPath = "blac8074/individualNumber.txt";
 		BufferedReader fileIn = null;
 		BufferedWriter fileOut = null;
 		try {
