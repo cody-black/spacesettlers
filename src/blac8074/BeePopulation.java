@@ -9,7 +9,7 @@ class Bee {
 
 public class BeePopulation {
 
-    private final float ELITE_RATIO = 0.1f;
+    private final float ELITE_RATIO = 0.1f; // Percent of best bees that are copied to the new generation
     private final float MUTATION_RATE = 0.05f; // Percent of genes that are mutated each generation
     private final int TOURNAMENT_SIZE = 5;
 
@@ -28,7 +28,7 @@ public class BeePopulation {
 
         for (int i=0; i<populationSize; i++) {
             Bee bee = new Bee();
-            bee.chromosome = new BeeChromosome(50, 50);
+            bee.chromosome = new BeeChromosome(50f, 50f, 5000, 500.0);
             bee.score = 0;
             bees[i] = bee;
         }

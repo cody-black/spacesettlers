@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 import spacesettlers.actions.*;
+import spacesettlers.clients.ImmutableTeamInfo;
 import spacesettlers.clients.TeamClient;
 import spacesettlers.graphics.*;
 import spacesettlers.objects.*;
@@ -64,7 +65,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Number of ticks to evaulate a bee
 	//int numBeeEvalTicks = 250;
 	//int currBeeEvalTicks = 0;
-	float curScore = 0;
+	double currScore = 0;
 	double lastDamage = 0;
 	
 	// Number of bees in each generation
@@ -80,6 +81,8 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Path to the file keeping track of the individual number
 	// TODO: is there some way to set the contents of the file to "0" when the ladder starts?
 	String individualNumPath;
+	
+	String teamName = "Bee Beehavior (Black and Zemlin)";
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
@@ -121,6 +124,8 @@ public class BeehaviorTeamClient extends TeamClient {
 						beeArr[i].chromosome = new BeeChromosome();
 						beeArr[i].chromosome.pGainVel = Float.parseFloat(beeData[0]);
 						beeArr[i].chromosome.dGainVel = Float.parseFloat(beeData[1]);
+						beeArr[i].chromosome.lowEnergyThresh = Integer.parseInt(beeData[2]);
+						beeArr[i].chromosome.shootEnemyDist = Double.parseDouble(beeData[3]);
 						beeArr[i].score = Float.parseFloat(beeData[beeData.length - 1]);
 					}
 					fileIn.close();
@@ -128,7 +133,6 @@ public class BeehaviorTeamClient extends TeamClient {
 					bees.createNewGeneration();
 				}
 				// Save new generation to file
-				new File(genFilePath).createNewFile();
 				fileOut = new BufferedWriter(new FileWriter(genFilePath));
 				fileOut.write(bees.toString());
 				fileOut.close();
@@ -144,6 +148,12 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 			fileIn.close();
 			beeData = currLine.split(",");
+			
+			currBee = new BeeChromosome();
+			currBee.pGainVel = Float.parseFloat(beeData[0]);
+			currBee.dGainVel = Float.parseFloat(beeData[1]);
+			currBee.lowEnergyThresh = Integer.parseInt(beeData[2]);
+			currBee.shootEnemyDist = Double.parseDouble(beeData[3]);
 		}
 		catch (IOException e) {
 			e.printStackTrace();
@@ -190,15 +200,27 @@ public class BeehaviorTeamClient extends TeamClient {
 		targets = new HashMap<Ship, AbstractObject>();
 
 		//bees = new BeePopulation(80);
-		//currBee = bees.getNextBee(curScore);
+		//currBee = bees.getNextBee(currScore);
 	}
 
 	@Override
 	public void shutDown(Toroidal2DPhysics space) {
+		// TODO: set score here?
+		// Look through the info for all teams
+		ImmutableTeamInfo teamInfo = null;
+		for (ImmutableTeamInfo info : space.getTeamInfo()) {
+			// Info for our team
+			if (info.getTeamName().equalsIgnoreCase(teamName)) {
+				// TODO: replace info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected() with getTotalKillsReceived
+				currScore = info.getTotalDamageInflicted() - info.getTotalDamageReceived() - 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected()) + 2000 * info.getScore();
+				teamInfo = info;
+				break;
+			}
+		}
 		try {
 			// Write score for individual to generation file
 			List<String> lines = new ArrayList<>(Files.readAllLines(Paths.get(genFilePath)));
-			lines.set(individualNum % generationSize, lines.get(individualNum % generationSize) + curScore);
+			lines.set(individualNum % generationSize, lines.get(individualNum % generationSize) + teamInfo.getScore() + "," + currScore);
 			Files.write(Paths.get(genFilePath), lines);
 		} 
 		catch (IOException e) {
@@ -216,18 +238,18 @@ public class BeehaviorTeamClient extends TeamClient {
 			if (actionable instanceof Ship) {
 				ship = (Ship) actionable;
 
-				double deltaDmg = ship.getDamageReceived() - lastDamage;
-				lastDamage = ship.getDamageReceived();
+				//double deltaDmg = ship.getDamageReceived() - lastDamage;
+				//lastDamage = ship.getDamageReceived();
 
-				curScore += deltaDmg / 2;
+				//currScore += deltaDmg / 2;
 				break;
 			}
 		}
 		
 		/*
 		if (currBeeEvalTicks % numBeeEvalTicks == 0) {
-			currBee = bees.getNextBee(curScore);
-			curScore = 0;
+			currBee = bees.getNextBee(currScore);
+			currScore = 0;
 		}
 
 		currBeeEvalTicks++;
@@ -324,9 +346,9 @@ public class BeehaviorTeamClient extends TeamClient {
 				
 				targetShip = null;
 				// If we are low on energy or chasing a core, don't find an enemy ship to target
-				if ((ship.getEnergy() > 2000) && !(targets.get(ship) instanceof AiCore)) {
-					double shipDistance = 150.0;
-					// Find the closest enemy ship within a certain distance
+				if ((ship.getEnergy() > currBee.lowEnergyThresh) && !(targets.get(ship) instanceof AiCore)) {
+					// Find the closest enemy ship within a certain (learned) distance
+					double shipDistance = currBee.shootEnemyDist;
 					for (Ship otherShip : space.getShips()) {
 						// If the other ship is an enemy ship
 						if (!otherShip.getTeamName().equals(ship.getTeamName())) {
@@ -356,10 +378,10 @@ public class BeehaviorTeamClient extends TeamClient {
 					action.setKvRotational(2 * Math.sqrt(30.0));
 				}
 
-				action.setKpTranslational(Float.parseFloat(beeData[0]));
-				action.setKvTranslational(Float.parseFloat(beeData[1]));
+				action.setKpTranslational(currBee.pGainVel);
+				action.setKvTranslational(currBee.dGainVel);
 
-				curScore += ship.getPosition().getTranslationalVelocity().getMagnitude() / 100f;
+				//currScore += ship.getPosition().getTranslationalVelocity().getMagnitude() / 100f;
 
 				actions.put(actionable.getId(), action);
 			}
@@ -487,7 +509,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	public AbstractObject findTarget(Ship ship, Toroidal2DPhysics space) {
 		AbstractObject targetObj = null;
 		// We are low on energy -> go get a beacon
-		if (ship.getEnergy() < 2000) {
+		if (ship.getEnergy() < currBee.lowEnergyThresh) {
 			Beacon beacon = pickNearestBeacon(space, ship);
 			if (beacon != null) {
 				return beacon;
@@ -520,7 +542,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		else {
 			AiCore core = pickNearestCore(space, ship);
 			// There isn't another core or there is another core but we are low on energy -> go to base
-			if ((core == null) || (ship.getEnergy() < 2000)) {
+			if ((core == null) || (ship.getEnergy() < currBee.lowEnergyThresh)) {
 				Base base = pickNearestFriendlyBase(space, ship);
 				if (base != null) {
 					return base;
