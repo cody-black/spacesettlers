@@ -211,8 +211,8 @@ public class BeehaviorTeamClient extends TeamClient {
 		for (ImmutableTeamInfo info : space.getTeamInfo()) {
 			// Info for our team
 			if (info.getTeamName().equalsIgnoreCase(teamName)) {
-				// TODO: replace info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected() with getTotalKillsReceived
-				currScore = info.getTotalDamageInflicted() - info.getTotalDamageReceived() - 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected()) + 2000 * info.getScore();
+				// TODO: replace + 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected()) with -3000 * getTotalKillsReceived
+				currScore = info.getTotalDamageInflicted() - info.getTotalDamageReceived() + 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected());
 				teamInfo = info;
 				break;
 			}
@@ -232,7 +232,6 @@ public class BeehaviorTeamClient extends TeamClient {
 	public Map<UUID, AbstractAction> getMovementStart(Toroidal2DPhysics space,
 			Set<AbstractActionableObject> actionableObjects) {
 		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();		
-		// TODO: is there some other way to get our team name other than from a ship?
 		Ship ship = null;
 		for (AbstractActionableObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
