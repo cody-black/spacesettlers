@@ -3,6 +3,7 @@ package blac8074;
 public class BeeChromosome {
     public float pGainVel;
     public float dGainVel;
+    // TODO: more genes
 
     /*
     And on the first day God created a bee
@@ -29,13 +30,20 @@ public class BeeChromosome {
     	
 	}
 
-	public void mutate() {
-        this.pGainVel += Math.random() - 0.5;
-        this.dGainVel += Math.random() - 0.5;
+	public void mutate(float mutationRate) {
+		// TODO: is there a better way to do this?
+		// TODO: how are we supposed to mutate each gene?
+		if (Math.random() < mutationRate) {
+			this.pGainVel += Math.random() - 0.5;
+		}
+		
+		if (Math.random() < mutationRate) {
+			this.dGainVel += Math.random() - 0.5;
+		}
     }
     
     /*
-     * Returns a String containing the values of the genes of the chromosome, seperated by commas
+     * Returns a String containing the values of the genes of the chromosome followed by commas
      */
     public String toString() {
     	String values = "";

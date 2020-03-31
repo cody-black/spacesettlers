@@ -62,15 +62,15 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Which bee are we lookin at
 	BeeChromosome currBee;
 	// Number of ticks to evaulate a bee
-	int numBeeEvalTicks = 250;
-	int currBeeEvalTicks = 0;
+	//int numBeeEvalTicks = 250;
+	//int currBeeEvalTicks = 0;
 	float curScore = 0;
 	double lastDamage = 0;
 	
 	// Number of bees in each generation
-	int generationSize = 100;
+	int generationSize = 20;
 	// Current generation number
-	int currGen = 0;
+	int currGen;
 	// Number of the current individual
 	int individualNum;
 	// Stats for the current bee
@@ -125,7 +125,7 @@ public class BeehaviorTeamClient extends TeamClient {
 					}
 					fileIn.close();
 					bees = new BeePopulation(beeArr);
-					bees.evolve();
+					bees.createNewGeneration();
 				}
 				// Save new generation to file
 				new File(genFilePath).createNewFile();
