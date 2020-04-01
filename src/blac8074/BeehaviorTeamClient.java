@@ -38,6 +38,10 @@ public class BeehaviorTeamClient extends TeamClient {
 	static final int PATH_UPDATE_INTERVAL = 10;
 	// Whether or not to draw graphics for debugging pathfinding
 	static final boolean DEBUG_GRAPHICS = false;
+	// Whether or not to draw graphics for debugging learning
+	final boolean LEARNING_GRAPHICS = false;
+	// Whether the agent should be learning using a GA
+	final boolean GA_LEARNING = true;
 	
 	// Graph to store nodes that represent the environment
 	BeeGraph graph;
@@ -52,6 +56,8 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashMap<Ship, AbstractObject> targets;
 	// Stores bee pursuit graphics
 	HashSet<SpacewarGraphics> bpGraphics;
+	// Graphics for showing learned ship targeting
+	HashSet<SpacewarGraphics> enemyTargetGraphics;
 	// Bee Pursuit - used to move along paths
 	BeePursuit bp;
 	// Ship that is being targeted - used so we know which ship we're shooting at
@@ -86,77 +92,89 @@ public class BeehaviorTeamClient extends TeamClient {
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
-		individualNumPath = "blac8074/individualNumber.txt";
-		BufferedReader fileIn = null;
-		BufferedWriter fileOut = null;
-		try {
-			// Get the number of the current individual
-			fileIn = new BufferedReader(new FileReader(individualNumPath));
-			individualNum = Integer.parseInt(fileIn.readLine());
-			fileIn.close();
-			
-			// Update individual number in data file
-			fileOut = new BufferedWriter(new FileWriter(individualNumPath));
-			fileOut.write(Integer.toString(individualNum + 1));
-			fileOut.close();
-			
-			// Calculate current generation
-			currGen = individualNum / generationSize;
-			
-			// Path to file that contains (or will contain) info for current generation
-			genFilePath = "blac8074/gen" + currGen +".csv";
-			
-			// If it is time for a new generation
-			if ((individualNum % generationSize) == 0) {
-				// Create new generation
-				if (currGen == 0) {
-					// Create initial random generation
-					bees = new BeePopulation(generationSize);
-				}
-				else {
-					// Create generation based on previous generation
-					Bee[] beeArr = new Bee[generationSize];
-					fileIn = new BufferedReader(new FileReader("blac8074/gen" + (currGen - 1) + ".csv"));
-					for (int i = 0; i < generationSize; i++) {
-						String line = fileIn.readLine();
-						beeData = line.split(",");
-						beeArr[i] = new Bee();
-						beeArr[i].chromosome = new BeeChromosome();
-						beeArr[i].chromosome.pGainVel = Float.parseFloat(beeData[0]);
-						beeArr[i].chromosome.dGainVel = Float.parseFloat(beeData[1]);
-						beeArr[i].chromosome.lowEnergyThresh = Integer.parseInt(beeData[2]);
-						beeArr[i].chromosome.shootEnemyDist = Double.parseDouble(beeData[3]);
-						beeArr[i].score = Float.parseFloat(beeData[beeData.length - 1]);
-					}
-					fileIn.close();
-					bees = new BeePopulation(beeArr);
-					bees.createNewGeneration();
-				}
-				// Save new generation to file
-				fileOut = new BufferedWriter(new FileWriter(genFilePath));
-				fileOut.write(bees.toString());
+		if (GA_LEARNING) {
+			BufferedReader fileIn = null;
+			BufferedWriter fileOut = null;
+			individualNumPath = "blac8074/individualNumber.txt";
+			try {
+				// Get the number of the current individual
+				fileIn = new BufferedReader(new FileReader(individualNumPath));
+				individualNum = Integer.parseInt(fileIn.readLine());
+				fileIn.close();
+				
+				// Update individual number in data file
+				fileOut = new BufferedWriter(new FileWriter(individualNumPath));
+				fileOut.write(Integer.toString(individualNum + 1));
 				fileOut.close();
+				
+				// Calculate current generation
+				currGen = individualNum / generationSize;
+				
+				// Path to file that contains (or will contain) info for current generation
+				genFilePath = "blac8074/gen" + currGen +".csv";
+				
+				// If it is time for a new generation
+				if ((individualNum % generationSize) == 0) {
+					// Create new generation
+					if (currGen == 0) {
+						// Create initial random generation
+						bees = new BeePopulation(generationSize);
+					}
+					else {
+						// Create generation based on previous generation
+						Bee[] beeArr = new Bee[generationSize];
+						fileIn = new BufferedReader(new FileReader("blac8074/gen" + (currGen - 1) + ".csv"));
+						for (int i = 0; i < generationSize; i++) {
+							String line = fileIn.readLine();
+							beeData = line.split(",");
+							beeArr[i] = new Bee();
+							beeArr[i].chromosome = new BeeChromosome();
+							beeArr[i].chromosome.pGainVel = Float.parseFloat(beeData[0]);
+							beeArr[i].chromosome.dGainVel = Float.parseFloat(beeData[1]);
+							beeArr[i].chromosome.lowEnergyThresh = Integer.parseInt(beeData[2]);
+							beeArr[i].chromosome.shootEnemyDist = Double.parseDouble(beeData[3]);
+							beeArr[i].score = Float.parseFloat(beeData[beeData.length - 1]);
+						}
+						fileIn.close();
+						bees = new BeePopulation(beeArr);
+						bees.createNewGeneration();
+					}
+					// Save new generation to file
+					fileOut = new BufferedWriter(new FileWriter(genFilePath));
+					fileOut.write(bees.toString());
+					fileOut.close();
+				}
+		
+				// Read data for current individual
+				fileIn = new BufferedReader(new FileReader(genFilePath));
+				int currLineNum = 0;
+				String currLine = "";
+				while (currLineNum <= (individualNum % generationSize)) {
+					currLine = fileIn.readLine();
+					++currLineNum;
+				}
+				fileIn.close();
+				beeData = currLine.split(",");
+				
+				currBee = new BeeChromosome();
+				currBee.pGainVel = Float.parseFloat(beeData[0]);
+				currBee.dGainVel = Float.parseFloat(beeData[1]);
+				currBee.lowEnergyThresh = Integer.parseInt(beeData[2]);
+				currBee.shootEnemyDist = Double.parseDouble(beeData[3]);
 			}
-	
-			// Read data for current individual
-			fileIn = new BufferedReader(new FileReader(genFilePath));
-			int currLineNum = 0;
-			String currLine = "";
-			while (currLineNum <= (individualNum % generationSize)) {
-				currLine = fileIn.readLine();
-				++currLineNum;
+			catch (IOException e) {
+				e.printStackTrace();
 			}
-			fileIn.close();
-			beeData = currLine.split(",");
-			
-			currBee = new BeeChromosome();
-			currBee.pGainVel = Float.parseFloat(beeData[0]);
-			currBee.dGainVel = Float.parseFloat(beeData[1]);
-			currBee.lowEnergyThresh = Integer.parseInt(beeData[2]);
-			currBee.shootEnemyDist = Double.parseDouble(beeData[3]);
 		}
-		catch (IOException e) {
-			e.printStackTrace();
+		else {
+			// Values to use when not learning
+			// Learned values from generation 13
+			// dGainVel isn't currently being used
+			currBee = new BeeChromosome();
+			currBee.pGainVel = 1.97f;
+			currBee.dGainVel = -1f;
+			currBee.lowEnergyThresh = 1515;
+			currBee.shootEnemyDist = 453;
 		}
 		
 		// Number of grid squares in x dimension
@@ -198,6 +216,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		paths = new HashMap<Ship, ArrayList<BeeNode>>();
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
+		enemyTargetGraphics = new HashSet<SpacewarGraphics>();
 
 		//bees = new BeePopulation(80);
 		//currBee = bees.getNextBee(currScore);
@@ -359,6 +378,10 @@ public class BeehaviorTeamClient extends TeamClient {
 							}
 						}
 					}
+					if (targetShip != null) {
+						enemyTargetGraphics.add(new TargetGraphics(16, Color.WHITE, targetShip.getPosition()));
+					}
+					enemyTargetGraphics.add(new CircleGraphics((int)currBee.shootEnemyDist, Color.WHITE, ship.getPosition()));
 				}
 				MoveActionWithOrientation action;
 				// If there's no ship to target, don't worry about orientation
@@ -378,7 +401,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 
 				action.setKpTranslational(currBee.pGainVel);
-				action.setKvTranslational(currBee.dGainVel);
+				action.setKvTranslational(2 * Math.sqrt(currBee.pGainVel));
 
 				//currScore += ship.getPosition().getTranslationalVelocity().getMagnitude() / 100f;
 
@@ -412,6 +435,11 @@ public class BeehaviorTeamClient extends TeamClient {
 			// Add graphics showing where on the path we are aiming
 			graphics.addAll(bpGraphics);
 		}
+		if (LEARNING_GRAPHICS) {
+			// Add graphics showing shootEnemyDist and which enemy (if any) is being targeted
+			graphics.addAll(enemyTargetGraphics);
+		}
+		enemyTargetGraphics.clear();
 		return graphics;
 	}
 
