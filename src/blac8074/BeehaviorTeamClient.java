@@ -75,7 +75,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	double lastDamage = 0;
 	
 	// Number of bees in each generation
-	int generationSize = 20;
+	int generationSize = 50;
 	// Current generation number
 	int currGen;
 	// Number of the current individual
@@ -225,25 +225,27 @@ public class BeehaviorTeamClient extends TeamClient {
 	@Override
 	public void shutDown(Toroidal2DPhysics space) {
 		// TODO: set score here?
-		// Look through the info for all teams
-		ImmutableTeamInfo teamInfo = null;
-		for (ImmutableTeamInfo info : space.getTeamInfo()) {
-			// Info for our team
-			if (info.getTeamName().equalsIgnoreCase(teamName)) {
-				// TODO: replace + 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected()) with -3000 * getTotalKillsReceived
-				currScore = info.getTotalDamageInflicted() - info.getTotalDamageReceived() + 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected());
-				teamInfo = info;
-				break;
+		if (GA_LEARNING) {
+			// Look through the info for all teams
+			ImmutableTeamInfo teamInfo = null;
+			for (ImmutableTeamInfo info : space.getTeamInfo()) {
+				// Info for our team
+				if (info.getTeamName().equalsIgnoreCase(teamName)) {
+					// TODO: replace + 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected()) with -3000 * getTotalKillsReceived
+					currScore = info.getTotalDamageInflicted() - info.getTotalDamageReceived() + 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected());
+					teamInfo = info;
+					break;
+				}
 			}
-		}
-		try {
-			// Write score for individual to generation file
-			List<String> lines = new ArrayList<>(Files.readAllLines(Paths.get(genFilePath)));
-			lines.set(individualNum % generationSize, lines.get(individualNum % generationSize) + teamInfo.getScore() + "," + currScore);
-			Files.write(Paths.get(genFilePath), lines);
-		} 
-		catch (IOException e) {
-			e.printStackTrace();
+			try {
+				// Write score for individual to generation file
+				List<String> lines = new ArrayList<>(Files.readAllLines(Paths.get(genFilePath)));
+				lines.set(individualNum % generationSize, lines.get(individualNum % generationSize) + teamInfo.getScore() + "," + currScore);
+				Files.write(Paths.get(genFilePath), lines);
+			} 
+			catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 
