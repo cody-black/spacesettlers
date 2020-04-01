@@ -1,8 +1,8 @@
 package blac8074;
 
 public class BeeChromosome {
-    public float pGainVel;
-    public float dGainVel;
+    public double translationalKp;
+    public double rotationalKp;
     public int lowEnergyThresh;
     public double shootEnemyDist;
     // TODO: more genes?
@@ -10,9 +10,9 @@ public class BeeChromosome {
     /*
     And on the first day God created a bee
      */
-    public BeeChromosome(float maxP, float maxD, int maxLowEnergy, double maxShootDist) {
-        this.pGainVel = (float) (Math.random() * maxP);
-        this.dGainVel = (float) (Math.random() * maxD);
+    public BeeChromosome(double maxP, double maxD, int maxLowEnergy, double maxShootDist) {
+        this.translationalKp = Math.random() * maxP;
+        this.rotationalKp = Math.random() * maxD;
         this.lowEnergyThresh = (int)(Math.random() * maxLowEnergy);
         this.shootEnemyDist = Math.random() * maxShootDist;
     }
@@ -30,8 +30,8 @@ public class BeeChromosome {
             this.dGainVel = mommy.dGainVel;
         }
         */
-    	this.pGainVel = (mommy.pGainVel + daddy.pGainVel) / 2.0f;
-    	this.dGainVel = (mommy.dGainVel + daddy.dGainVel) / 2.0f;
+    	this.translationalKp = (mommy.translationalKp + daddy.translationalKp) / 2.0f;
+    	this.rotationalKp = (mommy.rotationalKp + daddy.rotationalKp) / 2.0f;
     	this.lowEnergyThresh = (mommy.lowEnergyThresh + daddy.lowEnergyThresh) / 2;
     	this.shootEnemyDist = (mommy.shootEnemyDist + daddy.shootEnemyDist) / 2.0;
     }
@@ -44,11 +44,11 @@ public class BeeChromosome {
 		// TODO: is there a better way to do this?
 		// TODO: how are we supposed to mutate each gene?
 		if (Math.random() < mutationRate) {
-			this.pGainVel += (Math.random() - 0.5) * pGainVel;
+			this.translationalKp += (Math.random() - 0.5) * translationalKp;
 		}
 		
 		if (Math.random() < mutationRate) {
-			this.dGainVel += (Math.random() - 0.5) * dGainVel;
+			this.rotationalKp += (Math.random() - 0.5) * rotationalKp;
 		}
 		
 		if (Math.random() < mutationRate) {
@@ -65,8 +65,8 @@ public class BeeChromosome {
      */
     public String toString() {
     	String values = "";
-    	values += Float.toString(pGainVel) + ",";
-    	values += Float.toString(dGainVel) + ",";
+    	values += Double.toString(translationalKp) + ",";
+    	values += Double.toString(rotationalKp) + ",";
     	values += Integer.toString(lowEnergyThresh) + ",";
     	values += Double.toString(shootEnemyDist) + ",";
     	// Add more as we add more genes

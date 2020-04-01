@@ -28,7 +28,7 @@ public class BeePopulation {
 
         for (int i=0; i<populationSize; i++) {
             Bee bee = new Bee();
-            bee.chromosome = new BeeChromosome(50f, 50f, 5000, 500.0);
+            bee.chromosome = new BeeChromosome(50.0, 50.0, 5000, 1000.0);
             bee.score = 0;
             bees[i] = bee;
         }
@@ -77,8 +77,8 @@ public class BeePopulation {
 
         //List<Bee> beeList = Arrays.asList(bees);
 
-        System.out.println("Best Score " + bees[0].score);
-        System.out.println("P: " + bees[0].chromosome.pGainVel + ", D: " + bees[0].chromosome.dGainVel);
+        //System.out.println("Best Score " + bees[0].score);
+        //System.out.println("P: " + bees[0].chromosome.pGainVel + ", D: " + bees[0].chromosome.dGainVel);
 
         Bee[] newBees = new Bee[populationSize];
         
