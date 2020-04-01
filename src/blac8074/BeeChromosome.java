@@ -44,19 +44,19 @@ public class BeeChromosome {
 		// TODO: is there a better way to do this?
 		// TODO: how are we supposed to mutate each gene?
 		if (Math.random() < mutationRate) {
-			this.translationalKp += (Math.random() - 0.5) * translationalKp;
+			this.translationalKp += (Math.random() - 0.5) * (translationalKp * 2.0);
 		}
 		
 		if (Math.random() < mutationRate) {
-			this.rotationalKp += (Math.random() - 0.5) * rotationalKp;
+			this.rotationalKp += (Math.random() - 0.5) * (rotationalKp * 2.0);
 		}
 		
 		if (Math.random() < mutationRate) {
-			this.lowEnergyThresh += (Math.random() - 0.5) * lowEnergyThresh;
+			this.lowEnergyThresh += (Math.random() - 0.5) * (lowEnergyThresh * 2);
 		}
 		
 		if (Math.random() < mutationRate) {
-			this.shootEnemyDist += (Math.random() - 0.5) * shootEnemyDist;
+			this.shootEnemyDist += (Math.random() - 0.5) * (shootEnemyDist * 2.0);
 		}
     }
     
