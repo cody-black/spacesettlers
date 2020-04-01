@@ -3,7 +3,6 @@ package blac8074;
 import java.awt.Color;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -75,7 +74,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	double lastDamage = 0;
 	
 	// Number of bees in each generation
-	int generationSize = 50;
+	int generationSize = 40;
 	// Current generation number
 	int currGen;
 	// Number of the current individual
@@ -129,8 +128,8 @@ public class BeehaviorTeamClient extends TeamClient {
 							beeData = line.split(",");
 							beeArr[i] = new Bee();
 							beeArr[i].chromosome = new BeeChromosome();
-							beeArr[i].chromosome.pGainVel = Float.parseFloat(beeData[0]);
-							beeArr[i].chromosome.dGainVel = Float.parseFloat(beeData[1]);
+							beeArr[i].chromosome.translationalKp = Double.parseDouble(beeData[0]);
+							beeArr[i].chromosome.rotationalKp = Double.parseDouble(beeData[1]);
 							beeArr[i].chromosome.lowEnergyThresh = Integer.parseInt(beeData[2]);
 							beeArr[i].chromosome.shootEnemyDist = Double.parseDouble(beeData[3]);
 							beeArr[i].score = Float.parseFloat(beeData[beeData.length - 1]);
@@ -157,8 +156,8 @@ public class BeehaviorTeamClient extends TeamClient {
 				beeData = currLine.split(",");
 				
 				currBee = new BeeChromosome();
-				currBee.pGainVel = Float.parseFloat(beeData[0]);
-				currBee.dGainVel = Float.parseFloat(beeData[1]);
+				currBee.translationalKp = Double.parseDouble(beeData[0]);
+				currBee.rotationalKp = Double.parseDouble(beeData[1]);
 				currBee.lowEnergyThresh = Integer.parseInt(beeData[2]);
 				currBee.shootEnemyDist = Double.parseDouble(beeData[3]);
 			}
@@ -171,8 +170,8 @@ public class BeehaviorTeamClient extends TeamClient {
 			// Learned values from generation 13
 			// dGainVel isn't currently being used
 			currBee = new BeeChromosome();
-			currBee.pGainVel = 1.97f;
-			currBee.dGainVel = -1f;
+			currBee.translationalKp = 14;
+			currBee.rotationalKp = 30.0;
 			currBee.lowEnergyThresh = 1515;
 			currBee.shootEnemyDist = 453;
 		}
@@ -311,11 +310,20 @@ public class BeehaviorTeamClient extends TeamClient {
 					if (target != null) {
 						targets.put(ship, target);
 						Position targetPos = target.getPosition();
-						// Aim ahead of a moving target
-						if (target.isMoveable()) {
-							targetPos = new Position(targetPos.getX() + targetPos.getxVelocity(), targetPos.getY() + targetPos.getyVelocity());
-							space.toroidalWrap(targetPos);
+						// Avoid crashing into the target ship
+						if (target instanceof Ship) {
+							if (space.findShortestDistance(ship.getPosition(), target.getPosition()) < (3 * ship.getRadius())) {
+								targetPos = ship.getPosition();
+							}
 						}
+						else {
+							// Aim ahead of a moving target
+							if (target.isMoveable()) {
+								targetPos = new Position(targetPos.getX() + targetPos.getxVelocity(), targetPos.getY() + targetPos.getyVelocity());
+								space.toroidalWrap(targetPos);
+							}
+						}
+						
 						// Generate path using A* algorithm
 						if (A_STAR) {
 							path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
@@ -398,12 +406,12 @@ public class BeehaviorTeamClient extends TeamClient {
 					goalPos.setOrientation(new Vector2D(targetShipPos.getX() - currentPosition.getX(),  
 							targetShipPos.getY() - currentPosition.getY()).getAngle());
 					action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
-					action.setKpRotational(30.0);
-					action.setKvRotational(2 * Math.sqrt(30.0));
+					action.setKpRotational(currBee.rotationalKp);
+					action.setKvRotational(2 * Math.sqrt(currBee.rotationalKp));
 				}
 
-				action.setKpTranslational(currBee.pGainVel);
-				action.setKvTranslational(2 * Math.sqrt(currBee.pGainVel));
+				action.setKpTranslational(currBee.translationalKp);
+				action.setKvTranslational(2 * Math.sqrt(currBee.translationalKp));
 
 				//currScore += ship.getPosition().getTranslationalVelocity().getMagnitude() / 100f;
 
@@ -537,11 +545,11 @@ public class BeehaviorTeamClient extends TeamClient {
 	 */
 	public AbstractObject findTarget(Ship ship, Toroidal2DPhysics space) {
 		AbstractObject targetObj = null;
-		// We are low on energy -> go get a beacon
+		// We are low on energy -> go get energy
 		if (ship.getEnergy() < currBee.lowEnergyThresh) {
-			Beacon beacon = pickNearestBeacon(space, ship);
-			if (beacon != null) {
-				return beacon;
+			AbstractObject energy = pickNearestEnergy(space, ship);
+			if (energy != null) {
+				return energy;
 			}
 		}
 		// We don't have a core -> check for cores
@@ -560,10 +568,10 @@ public class BeehaviorTeamClient extends TeamClient {
 						return base;
 					}
 				}
-				// continue getting beacons
-				Beacon beacon = pickNearestBeacon(space, ship);
-				if (beacon != null) {
-					return beacon;
+				// Chase an enemy ship
+				Ship enemy = pickNearestEnemy(space, ship);
+				if (enemy != null) {
+					return enemy;
 				}
 			}
 		} 
@@ -586,23 +594,35 @@ public class BeehaviorTeamClient extends TeamClient {
 	}
 	
 	/*
-	 * Find the nearest beacon
+	 * Find the nearest beacon or base with 2000 or more energy
 	 */
-	private Beacon pickNearestBeacon(Toroidal2DPhysics space, Ship ship) {
+	private AbstractObject pickNearestEnergy(Toroidal2DPhysics space, Ship ship) {
 		// get the current beacons
 		Set<Beacon> beacons = space.getBeacons();
 
-		Beacon closestBeacon = null;
+		AbstractObject closestEnergy = null;
 		double bestDistance = Double.POSITIVE_INFINITY;
 
 		for (Beacon beacon : beacons) {
 			double dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
 			if (dist < bestDistance) {
 				bestDistance = dist;
-				closestBeacon = beacon;
+				closestEnergy = beacon;
 			}
 		}
-		return closestBeacon;
+		
+		for (Base base : space.getBases()) {
+			if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
+				if (base.getEnergy() >= 2000) {
+					double dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
+					if (dist < bestDistance) {
+						bestDistance = dist;
+						closestEnergy = base;
+					}
+				}
+			}
+		}
+		return closestEnergy;
 	}
 	
 	/*
@@ -645,6 +665,26 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 
 		return closestCore;
+	}
+	
+	/*
+	 * Find the nearest enemy ship
+	 */
+	private Ship pickNearestEnemy(Toroidal2DPhysics space, Ship ship) {
+		double bestDistance = Double.POSITIVE_INFINITY;
+		Ship closestEnemy = null;
+		for (Ship otherShip : space.getShips()) {
+			// If the other ship is a living enemy ship
+			if (!otherShip.getTeamName().equalsIgnoreCase(ship.getTeamName()) && otherShip.isAlive()) {
+				// Get distance without toroidal wrap because toroidal shooting is hard
+				double distance = space.findShortestDistance(ship.getPosition(), otherShip.getPosition());
+				if (distance < bestDistance) {
+					bestDistance = distance;
+					closestEnemy = otherShip;
+				}
+			}
+		}
+		return closestEnemy;
 	}
 	
 	/*
@@ -713,20 +753,10 @@ public class BeehaviorTeamClient extends TeamClient {
 			if (!obstructionFound) {
 				// Check for bases
 				for (Base base : space.getBases()) {
-					if (space.findShortestDistanceVector(base.getPosition(), graph.getNode(nodeIndex).getPosition())
-							.getMagnitude() <= (radius + (2 * base.getRadius()))) {
-						graph.obstructNode(nodeIndex);
-						obstructionFound = true;
-						break;
-					}
-				}
-			}
-			if (!obstructionFound && (teamName != null)) {
-				// Check for living enemy ships
-				for (Ship ship : space.getShips()) {
-					if (!ship.getTeamName().equals(teamName) && ship.isAlive()) {
-						if (space.findShortestDistanceVector(ship.getPosition(), graph.getNode(nodeIndex).getPosition())
-								.getMagnitude() <= (radius + (2 * ship.getRadius()))) {
+					// Don't obstruct around the base our ship is heading to
+					if (!targets.containsValue(base)) {
+						if (space.findShortestDistanceVector(base.getPosition(), graph.getNode(nodeIndex).getPosition())
+								.getMagnitude() <= (radius + (2 * base.getRadius()))) {
 							graph.obstructNode(nodeIndex);
 							obstructionFound = true;
 							break;
@@ -734,14 +764,33 @@ public class BeehaviorTeamClient extends TeamClient {
 					}
 				}
 			}
+			if (!obstructionFound && (teamName != null)) {
+				// Check for living enemy ships
+				for (Ship ship : space.getShips()) {
+					if (!ship.getTeamName().equals(teamName) && ship.isAlive()) {
+						// If the enemy ship isn't being chased by our ship
+						if (!targets.containsValue(ship)) {
+							if (space.findShortestDistanceVector(ship.getPosition(), graph.getNode(nodeIndex).getPosition())
+									.getMagnitude() <= (radius + (2 * ship.getRadius()))) {
+								graph.obstructNode(nodeIndex);
+								obstructionFound = true;
+								break;
+							}
+						}
+					}
+				}
+			}
 			// Check for weapon projectiles
 			if (!obstructionFound) {
 				for (AbstractWeapon weapon : space.getWeapons()) {
-					if (space.findShortestDistanceVector(weapon.getPosition(), graph.getNode(nodeIndex).getPosition())
-							.getMagnitude() <= (radius + (2 * weapon.getRadius()))) {
-						graph.obstructNode(nodeIndex);
-						obstructionFound = true;
-						break;
+					// Don't obstruct nodes based on our own bullets because otherwise ships get confused when they shoot in front of themselves
+					if (!weapon.getFiringShip().getTeamName().equalsIgnoreCase(teamName)) {
+						if (space.findShortestDistanceVector(weapon.getPosition(), graph.getNode(nodeIndex).getPosition())
+								.getMagnitude() <= (radius + (2 * weapon.getRadius()))) {
+							graph.obstructNode(nodeIndex);
+							obstructionFound = true;
+							break;
+						}
 					}
 				}
 			}
