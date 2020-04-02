@@ -74,7 +74,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	double lastDamage = 0;
 	
 	// Number of bees in each generation
-	int generationSize = 40;
+	int generationSize = 20;
 	// Current generation number
 	int currGen;
 	// Number of the current individual
@@ -230,8 +230,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			for (ImmutableTeamInfo info : space.getTeamInfo()) {
 				// Info for our team
 				if (info.getTeamName().equalsIgnoreCase(teamName)) {
-					// TODO: replace + 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected()) with -3000 * getTotalKillsReceived
-					currScore = info.getTotalDamageInflicted() - info.getTotalDamageReceived() + 3000 * (info.getScore() - info.getTotalKillsInflicted() - info.getTotalCoresCollected());
+					currScore = info.getTotalDamageInflicted() - 3000 * info.getTotalKillsReceived();
 					teamInfo = info;
 					break;
 				}
