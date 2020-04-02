@@ -40,8 +40,9 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Whether or not to draw graphics for debugging learning
 	final boolean LEARNING_GRAPHICS = false;
 	// Whether the agent should be learning using a GA
-	final boolean GA_LEARNING = false;
-	
+	final boolean GA_LEARNING = true;
+	// Number of bees (individuals) in each generation
+	final int GENERATION_SIZE = 40;
 	// Graph to store nodes that represent the environment
 	BeeGraph graph;
 	
@@ -67,14 +68,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	BeePopulation bees;
 	// Which bee are we lookin at
 	BeeChromosome currBee;
-	// Number of ticks to evaulate a bee
-	//int numBeeEvalTicks = 250;
-	//int currBeeEvalTicks = 0;
-	double currScore = 0;
-	double lastDamage = 0;
 	
-	// Number of bees in each generation
-	int generationSize = 20;
 	// Current generation number
 	int currGen;
 	// Number of the current individual
@@ -107,23 +101,23 @@ public class BeehaviorTeamClient extends TeamClient {
 				fileOut.close();
 				
 				// Calculate current generation
-				currGen = individualNum / generationSize;
+				currGen = individualNum / GENERATION_SIZE;
 				
 				// Path to file that contains (or will contain) info for current generation
 				genFilePath = "blac8074/gen" + currGen +".csv";
 				
 				// If it is time for a new generation
-				if ((individualNum % generationSize) == 0) {
+				if ((individualNum % GENERATION_SIZE) == 0) {
 					// Create new generation
 					if (currGen == 0) {
 						// Create initial random generation
-						bees = new BeePopulation(generationSize);
+						bees = new BeePopulation(GENERATION_SIZE);
 					}
 					else {
 						// Create generation based on previous generation
-						Bee[] beeArr = new Bee[generationSize];
+						Bee[] beeArr = new Bee[GENERATION_SIZE];
 						fileIn = new BufferedReader(new FileReader("blac8074/gen" + (currGen - 1) + ".csv"));
-						for (int i = 0; i < generationSize; i++) {
+						for (int i = 0; i < GENERATION_SIZE; i++) {
 							String line = fileIn.readLine();
 							beeData = line.split(",");
 							beeArr[i] = new Bee();
@@ -148,7 +142,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				fileIn = new BufferedReader(new FileReader(genFilePath));
 				int currLineNum = 0;
 				String currLine = "";
-				while (currLineNum <= (individualNum % generationSize)) {
+				while (currLineNum <= (individualNum % GENERATION_SIZE)) {
 					currLine = fileIn.readLine();
 					++currLineNum;
 				}
@@ -220,12 +214,13 @@ public class BeehaviorTeamClient extends TeamClient {
 	@Override
 	public void shutDown(Toroidal2DPhysics space) {
 		if (GA_LEARNING) {
+			double score = 0.0;
 			// Look through the info for all teams
 			ImmutableTeamInfo teamInfo = null;
 			for (ImmutableTeamInfo info : space.getTeamInfo()) {
 				// Info for our team
 				if (info.getTeamName().equalsIgnoreCase(teamName)) {
-					currScore = info.getTotalDamageInflicted() - 3000 * info.getTotalKillsReceived();
+					score = info.getTotalDamageInflicted() - 3000 * info.getTotalKillsReceived();
 					teamInfo = info;
 					break;
 				}
@@ -233,7 +228,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			try {
 				// Write score for individual to generation file
 				List<String> lines = new ArrayList<>(Files.readAllLines(Paths.get(genFilePath)));
-				lines.set(individualNum % generationSize, lines.get(individualNum % generationSize) + teamInfo.getScore() + "," + currScore);
+				lines.set(individualNum % GENERATION_SIZE, lines.get(individualNum % GENERATION_SIZE) + teamInfo.getScore() + "," + score);
 				Files.write(Paths.get(genFilePath), lines);
 			} 
 			catch (IOException e) {

@@ -5,7 +5,7 @@
 	<width>1600</width>
 	
 	<!-- Number of steps of simulation -->
-	<simulationSteps>500000</simulationSteps>
+	<simulationSteps>2500</simulationSteps>
 
 	<!-- Timestep for a simulation (in seconds for the physics equations) -->
 	<simulationTimeStep>0.05</simulationTimeStep>
@@ -52,7 +52,7 @@
 			<configFile>core-clientinit.xml</configFile>
 		</HighLevelTeamConfig>
 		<HighLevelTeamConfig>
-			<teamName>Bee 🐝havior (Black and Zemlin)</teamName>
+			<teamName>Bee Beehavior (Black and Zemlin)</teamName>
 			<configFile>bee-clientinit.xml</configFile>
 		</HighLevelTeamConfig>
 	</teams>
@@ -75,7 +75,7 @@
 			<teamName>CoreCollectorTeam</teamName>
 		</BaseConfig>
 		<BaseConfig>
-			<teamName>Bee 🐝havior (Black and Zemlin)</teamName>
+			<teamName>Bee Beehavior (Black and Zemlin)</teamName>
 		</BaseConfig>
 	</bases>
 	
