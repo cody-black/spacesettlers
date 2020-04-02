@@ -25,6 +25,6 @@ Since the learning takes place exlusively on a ladder, it's not really possible 
 in real time. However, after setting GA_LEARNING to false in BeehaviorTeamClient.java, you can specify
 gene values in the initialize function and run the agent without a ladder. Setting LEARNING_GRAPHICS
 to true will visually depict the shootEnemyDist value as a white circle around the ship. However,
-since CirceGraphics are filled by default, I recommend commenting out graphics.fill(shape) in the 
+since CirceGraphics are filled by default, I recommend you COMMENT OUT GRAPHICS.FILL(SHAPE) in the 
 draw function in CircleGraphics.java which is found in spacesettlers.graphics. If you don't do this, 
 a large white circle will obscure much of the screen.

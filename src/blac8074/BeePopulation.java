@@ -2,6 +2,9 @@ package blac8074;
 
 import java.util.*;
 
+/**
+ * A BeePopulation consists of a generation of individuals (Bees).
+ */
 class Bee {
     BeeChromosome chromosome;
     float score;
@@ -11,11 +14,10 @@ public class BeePopulation {
 
     private final float ELITE_RATIO = 0.1f; // Percent of best bees that are copied to the new generation
     private final float MUTATION_RATE = 0.05f; // Percent of genes that are mutated each generation
-    private final int TOURNAMENT_SIZE = 2;
+    private final int TOURNAMENT_SIZE = 2; // Size of tournament in tournament selection
 
     private int populationSize;
     private Bee[] bees;
-    private int currBee = -1;
     private Random randGen;
 
     /*
@@ -48,37 +50,11 @@ public class BeePopulation {
     }
     
     /*
-     * I don't think this being used?
-     */
-    public BeeChromosome getNextBee(float score) {
-        if (currBee == -1) {
-            // Initialization
-            currBee = 0;
-        } else {
-            bees[currBee].score = score;
-            if (currBee == bees.length - 1) {
-                // End of generation
-                currBee = 0;
-                this.createNewGeneration();
-            } else {
-                currBee++;
-            }
-        }
-
-        return bees[currBee].chromosome;
-    }  
-    
-    /*
      * Creates a new population using the current population
      */
     public void createNewGeneration() {
     	// Sort reverse score order
         Arrays.sort(bees, (bee1, bee2) -> (Float.compare(bee2.score, bee1.score)));
-
-        //List<Bee> beeList = Arrays.asList(bees);
-
-        //System.out.println("Best Score " + bees[0].score);
-        //System.out.println("P: " + bees[0].chromosome.pGainVel + ", D: " + bees[0].chromosome.dGainVel);
 
         Bee[] newBees = new Bee[populationSize];
         
@@ -101,43 +77,6 @@ public class BeePopulation {
         }
         
         bees = newBees;
-        /*
-        // Selection (Tournament)
-        Bee[] newBees = new Bee[populationSize];
-
-        for (int i=0; i < populationSize * ELITE_RATIO; i++) {
-            Collections.shuffle(beeList);
-
-            Bee bestBee = beeList.get(0);
-            for (int j=1; j<TOURNAMENT_SIZE; j++) {
-                if (beeList.get(j).score > bestBee.score) {
-                    bestBee = beeList.get(j);
-                }
-            }
-
-            newBees[i] = bestBee;
-        }
-
-        // Crossover
-        for (int i=(int)(populationSize * ELITE_RATIO); i < populationSize; i++) {
-            // TODO: bees can self breed??
-            Bee bee1 = newBees[(int)(Math.random() * ELITE_RATIO * populationSize)];
-            Bee bee2 = newBees[(int)(Math.random() * ELITE_RATIO * populationSize)];
-
-            newBees[i] = new Bee();
-            newBees[i].chromosome = new BeeChromosome(bee1.chromosome, bee2.chromosome);
-            if (Math.random() < MUTATION_RATE) {
-                newBees[i].chromosome.mutate();
-            }
-        }
-
-        // Reset scores
-        for (Bee bee : newBees) {
-            bee.score = 0;
-        }
-        
-        bees = newBees;
-        */
     }
     
     /*

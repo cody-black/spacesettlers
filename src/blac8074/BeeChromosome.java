@@ -1,14 +1,16 @@
 package blac8074;
 
+/**
+ * A BeeChromosome stores genes representing characteristics of an individual (a Bee).
+ */
 public class BeeChromosome {
     public double translationalKp;
     public double rotationalKp;
     public int lowEnergyThresh;
     public double shootEnemyDist;
-    // TODO: more genes?
 
     /*
-    And on the first day God created a bee
+     * Creates a random individual given the max values for each gene
      */
     public BeeChromosome(double maxP, double maxD, int maxLowEnergy, double maxShootDist) {
         this.translationalKp = Math.random() * maxP;
@@ -18,20 +20,11 @@ public class BeeChromosome {
     }
 
     /*
-    When two bees love each other very much
+     * Creates a child from two parents using crossover
      */
     public BeeChromosome(BeeChromosome mommy, BeeChromosome daddy) {
-        /*
-    	if (Math.random() < 0.5) {
-            this.pGainVel = mommy.pGainVel;
-            this.dGainVel = daddy.dGainVel;
-        } else {
-            this.pGainVel = daddy.pGainVel;
-            this.dGainVel = mommy.dGainVel;
-        }
-        */
-    	this.translationalKp = (mommy.translationalKp + daddy.translationalKp) / 2.0f;
-    	this.rotationalKp = (mommy.rotationalKp + daddy.rotationalKp) / 2.0f;
+    	this.translationalKp = (mommy.translationalKp + daddy.translationalKp) / 2.0;
+    	this.rotationalKp = (mommy.rotationalKp + daddy.rotationalKp) / 2.0;
     	this.lowEnergyThresh = (mommy.lowEnergyThresh + daddy.lowEnergyThresh) / 2;
     	this.shootEnemyDist = (mommy.shootEnemyDist + daddy.shootEnemyDist) / 2.0;
     }
@@ -39,10 +32,11 @@ public class BeeChromosome {
     public BeeChromosome() {
     	
 	}
-
+    
+    /*
+     * Potentially mutates each gene by setting its value to a random value between 0 and 2x the current value
+     */
 	public void mutate(float mutationRate) {
-		// TODO: is there a better way to do this?
-		// TODO: how are we supposed to mutate each gene?
 		if (Math.random() < mutationRate) {
 			this.translationalKp = (2.0 * Math.random()) * translationalKp;
 		}
@@ -69,8 +63,6 @@ public class BeeChromosome {
     	values += Double.toString(rotationalKp) + ",";
     	values += Integer.toString(lowEnergyThresh) + ",";
     	values += Double.toString(shootEnemyDist) + ",";
-    	// Add more as we add more genes
-    	// values += ... + ","
     	return values;
     }
 }

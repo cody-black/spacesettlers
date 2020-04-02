@@ -57,7 +57,7 @@ public class CircleGraphics extends SpacewarGraphics {
         		drawLocation.getY() - radius, 2 * radius, 2 * radius);
 
         graphics.setColor(color);
-        graphics.fill(shape);
+        //graphics.fill(shape);
         graphics.setStroke(JSpaceSettlersComponent.THICK_STROKE);
         graphics.draw(shape);
 

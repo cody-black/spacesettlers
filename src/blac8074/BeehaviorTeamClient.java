@@ -40,7 +40,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Whether or not to draw graphics for debugging learning
 	final boolean LEARNING_GRAPHICS = false;
 	// Whether the agent should be learning using a GA
-	final boolean GA_LEARNING = true;
+	final boolean GA_LEARNING = false;
 	
 	// Graph to store nodes that represent the environment
 	BeeGraph graph;
@@ -167,13 +167,12 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		else {
 			// Values to use when not learning
-			// Learned values from generation 13
-			// dGainVel isn't currently being used
+			// These values are the (rough) average of the best individuals from 35 generations of learning
 			currBee = new BeeChromosome();
-			currBee.translationalKp = 14;
-			currBee.rotationalKp = 30.0;
-			currBee.lowEnergyThresh = 1515;
-			currBee.shootEnemyDist = 453;
+			currBee.translationalKp = 19.0;
+			currBee.rotationalKp = 28.0;
+			currBee.lowEnergyThresh = 2000;
+			currBee.shootEnemyDist = 500;
 		}
 		
 		// Number of grid squares in x dimension
@@ -216,14 +215,10 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
 		enemyTargetGraphics = new HashSet<SpacewarGraphics>();
-
-		//bees = new BeePopulation(80);
-		//currBee = bees.getNextBee(currScore);
 	}
 
 	@Override
 	public void shutDown(Toroidal2DPhysics space) {
-		// TODO: set score here?
 		if (GA_LEARNING) {
 			// Look through the info for all teams
 			ImmutableTeamInfo teamInfo = null;
@@ -255,23 +250,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		for (AbstractActionableObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
 				ship = (Ship) actionable;
-
-				//double deltaDmg = ship.getDamageReceived() - lastDamage;
-				//lastDamage = ship.getDamageReceived();
-
-				//currScore += deltaDmg / 2;
 				break;
 			}
 		}
-		
-		/*
-		if (currBeeEvalTicks % numBeeEvalTicks == 0) {
-			currBee = bees.getNextBee(currScore);
-			currScore = 0;
-		}
-
-		currBeeEvalTicks++;
-		*/
 
 		// Update obstructions frequently to make the debug graphics more responsive
 		if (DEBUG_GRAPHICS) {
