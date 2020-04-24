@@ -184,7 +184,7 @@ public class BeeGraph {
 		}
 		
 		int loopCount = 0;
-		int MAX_LOOPS = 1000;
+		int MAX_LOOPS = 10000;
 		
 		while (true) {
 			if (frontier.isEmpty()) {
