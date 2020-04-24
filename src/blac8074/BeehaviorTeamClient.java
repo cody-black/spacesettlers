@@ -1,17 +1,9 @@
 package blac8074;
 
 import java.awt.Color;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 import spacesettlers.actions.*;
-import spacesettlers.clients.ImmutableTeamInfo;
 import spacesettlers.clients.TeamClient;
 import spacesettlers.graphics.*;
 import spacesettlers.objects.*;
@@ -37,12 +29,12 @@ public class BeehaviorTeamClient extends TeamClient {
 	static final int PATH_UPDATE_INTERVAL = 10;
 	// Whether or not to draw graphics for debugging pathfinding
 	static final boolean DEBUG_GRAPHICS = false;
-	// Whether or not to draw graphics for debugging learning
-	final boolean LEARNING_GRAPHICS = false;
-	// Whether the agent should be learning using a GA
-	final boolean GA_LEARNING = true;
-	// Number of bees (individuals) in each generation
-	final int GENERATION_SIZE = 40;
+	
+	static final double TRANSLATIONAL_KP = 19.0;
+	static final double ROTATIONAL_KP = 28.0;
+	static final double LOW_ENERGY_THRESH = 2000;
+	static final double SHOOT_ENEMY_DIST = 500;
+	
 	// Graph to store nodes that represent the environment
 	BeeGraph graph;
 	
@@ -56,119 +48,14 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashMap<Ship, AbstractObject> targets;
 	// Stores bee pursuit graphics
 	HashSet<SpacewarGraphics> bpGraphics;
-	// Graphics for showing learned ship targeting
-	HashSet<SpacewarGraphics> enemyTargetGraphics;
 	// Bee Pursuit - used to move along paths
 	BeePursuit bp;
 	// Ship that is being targeted - used so we know which ship we're shooting at
 	Ship targetShip;
-
-
-	// The Bees!
-	BeePopulation bees;
-	// Which bee are we lookin at
-	BeeChromosome currBee;
 	
-	// Current generation number
-	int currGen;
-	// Number of the current individual
-	int individualNum;
-	// Stats for the current bee
-	String[] beeData;
-	// Path to the file for the current generation
-	String genFilePath;
-	// Path to the file keeping track of the individual number
-	// TODO: is there some way to set the contents of the file to "0" when the ladder starts?
-	String individualNumPath;
-	
-	String teamName = "Bee Beehavior (Black and Zemlin)";
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
-		if (GA_LEARNING) {
-			BufferedReader fileIn = null;
-			BufferedWriter fileOut = null;
-			individualNumPath = "blac8074/individualNumber.txt";
-			try {
-				// Get the number of the current individual
-				fileIn = new BufferedReader(new FileReader(individualNumPath));
-				individualNum = Integer.parseInt(fileIn.readLine());
-				fileIn.close();
-				
-				// Update individual number in data file
-				fileOut = new BufferedWriter(new FileWriter(individualNumPath));
-				fileOut.write(Integer.toString(individualNum + 1));
-				fileOut.close();
-				
-				// Calculate current generation
-				currGen = individualNum / GENERATION_SIZE;
-				
-				// Path to file that contains (or will contain) info for current generation
-				genFilePath = "blac8074/gen" + currGen +".csv";
-				
-				// If it is time for a new generation
-				if ((individualNum % GENERATION_SIZE) == 0) {
-					// Create new generation
-					if (currGen == 0) {
-						// Create initial random generation
-						bees = new BeePopulation(GENERATION_SIZE);
-					}
-					else {
-						// Create generation based on previous generation
-						Bee[] beeArr = new Bee[GENERATION_SIZE];
-						fileIn = new BufferedReader(new FileReader("blac8074/gen" + (currGen - 1) + ".csv"));
-						for (int i = 0; i < GENERATION_SIZE; i++) {
-							String line = fileIn.readLine();
-							beeData = line.split(",");
-							beeArr[i] = new Bee();
-							beeArr[i].chromosome = new BeeChromosome();
-							beeArr[i].chromosome.translationalKp = Double.parseDouble(beeData[0]);
-							beeArr[i].chromosome.rotationalKp = Double.parseDouble(beeData[1]);
-							beeArr[i].chromosome.lowEnergyThresh = Integer.parseInt(beeData[2]);
-							beeArr[i].chromosome.shootEnemyDist = Double.parseDouble(beeData[3]);
-							beeArr[i].score = Float.parseFloat(beeData[beeData.length - 1]);
-						}
-						fileIn.close();
-						bees = new BeePopulation(beeArr);
-						bees.createNewGeneration();
-					}
-					// Save new generation to file
-					fileOut = new BufferedWriter(new FileWriter(genFilePath));
-					fileOut.write(bees.toString());
-					fileOut.close();
-				}
-		
-				// Read data for current individual
-				fileIn = new BufferedReader(new FileReader(genFilePath));
-				int currLineNum = 0;
-				String currLine = "";
-				while (currLineNum <= (individualNum % GENERATION_SIZE)) {
-					currLine = fileIn.readLine();
-					++currLineNum;
-				}
-				fileIn.close();
-				beeData = currLine.split(",");
-				
-				currBee = new BeeChromosome();
-				currBee.translationalKp = Double.parseDouble(beeData[0]);
-				currBee.rotationalKp = Double.parseDouble(beeData[1]);
-				currBee.lowEnergyThresh = Integer.parseInt(beeData[2]);
-				currBee.shootEnemyDist = Double.parseDouble(beeData[3]);
-			}
-			catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-		else {
-			// Values to use when not learning
-			// These values are the (rough) average of the best individuals from 35 generations of learning
-			currBee = new BeeChromosome();
-			currBee.translationalKp = 19.0;
-			currBee.rotationalKp = 28.0;
-			currBee.lowEnergyThresh = 2000;
-			currBee.shootEnemyDist = 500;
-		}
-		
 		// Number of grid squares in x dimension
 		int numSquaresX = space.getWidth() / (int)GRID_SIZE;
 		// Number of grid squares in y dimension
@@ -208,33 +95,11 @@ public class BeehaviorTeamClient extends TeamClient {
 		paths = new HashMap<Ship, ArrayList<BeeNode>>();
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
-		enemyTargetGraphics = new HashSet<SpacewarGraphics>();
 	}
 
 	@Override
 	public void shutDown(Toroidal2DPhysics space) {
-		if (GA_LEARNING) {
-			double score = 0.0;
-			// Look through the info for all teams
-			ImmutableTeamInfo teamInfo = null;
-			for (ImmutableTeamInfo info : space.getTeamInfo()) {
-				// Info for our team
-				if (info.getTeamName().equalsIgnoreCase(teamName)) {
-					score = info.getTotalDamageInflicted() - 3000 * info.getTotalKillsReceived();
-					teamInfo = info;
-					break;
-				}
-			}
-			try {
-				// Write score for individual to generation file
-				List<String> lines = new ArrayList<>(Files.readAllLines(Paths.get(genFilePath)));
-				lines.set(individualNum % GENERATION_SIZE, lines.get(individualNum % GENERATION_SIZE) + teamInfo.getScore() + "," + score);
-				Files.write(Paths.get(genFilePath), lines);
-			} 
-			catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
+		
 	}
 
 	@Override
@@ -349,9 +214,9 @@ public class BeehaviorTeamClient extends TeamClient {
 				
 				targetShip = null;
 				// If we are low on energy or chasing a core, don't find an enemy ship to target
-				if ((ship.getEnergy() > currBee.lowEnergyThresh) && !(targets.get(ship) instanceof AiCore)) {
+				if ((ship.getEnergy() > LOW_ENERGY_THRESH) && !(targets.get(ship) instanceof AiCore)) {
 					// Find the closest enemy ship within a certain (learned) distance
-					double shipDistance = currBee.shootEnemyDist;
+					double shipDistance = SHOOT_ENEMY_DIST;
 					for (Ship otherShip : space.getShips()) {
 						// If the other ship is an enemy ship
 						if (!otherShip.getTeamName().equals(ship.getTeamName())) {
@@ -363,10 +228,6 @@ public class BeehaviorTeamClient extends TeamClient {
 							}
 						}
 					}
-					if (targetShip != null) {
-						enemyTargetGraphics.add(new TargetGraphics(16, Color.WHITE, targetShip.getPosition()));
-					}
-					enemyTargetGraphics.add(new CircleGraphics((int)currBee.shootEnemyDist, Color.WHITE, ship.getPosition()));
 				}
 				MoveActionWithOrientation action;
 				// If there's no ship to target, don't worry about orientation
@@ -381,12 +242,12 @@ public class BeehaviorTeamClient extends TeamClient {
 					goalPos.setOrientation(new Vector2D(targetShipPos.getX() - currentPosition.getX(),  
 							targetShipPos.getY() - currentPosition.getY()).getAngle());
 					action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
-					action.setKpRotational(currBee.rotationalKp);
-					action.setKvRotational(2 * Math.sqrt(currBee.rotationalKp));
+					action.setKpRotational(ROTATIONAL_KP);
+					action.setKvRotational(2 * Math.sqrt(ROTATIONAL_KP));
 				}
 
-				action.setKpTranslational(currBee.translationalKp);
-				action.setKvTranslational(2 * Math.sqrt(currBee.translationalKp));
+				action.setKpTranslational(TRANSLATIONAL_KP);
+				action.setKvTranslational(2 * Math.sqrt(TRANSLATIONAL_KP));
 
 				//currScore += ship.getPosition().getTranslationalVelocity().getMagnitude() / 100f;
 
@@ -420,11 +281,6 @@ public class BeehaviorTeamClient extends TeamClient {
 			// Add graphics showing where on the path we are aiming
 			graphics.addAll(bpGraphics);
 		}
-		if (LEARNING_GRAPHICS) {
-			// Add graphics showing shootEnemyDist and which enemy (if any) is being targeted
-			graphics.addAll(enemyTargetGraphics);
-		}
-		enemyTargetGraphics.clear();
 		return graphics;
 	}
 
@@ -521,7 +377,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	public AbstractObject findTarget(Ship ship, Toroidal2DPhysics space) {
 		AbstractObject targetObj = null;
 		// We are low on energy -> go get energy
-		if (ship.getEnergy() < currBee.lowEnergyThresh) {
+		if (ship.getEnergy() < LOW_ENERGY_THRESH) {
 			AbstractObject energy = pickNearestEnergy(space, ship);
 			if (energy != null) {
 				return energy;
@@ -554,7 +410,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		else {
 			AiCore core = pickNearestCore(space, ship);
 			// There isn't another core or there is another core but we are low on energy -> go to base
-			if ((core == null) || (ship.getEnergy() < currBee.lowEnergyThresh)) {
+			if ((core == null) || (ship.getEnergy() < LOW_ENERGY_THRESH)) {
 				Base base = pickNearestFriendlyBase(space, ship);
 				if (base != null) {
 					return base;
