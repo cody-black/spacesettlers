@@ -60,11 +60,6 @@ public class ImmutableTeamInfo {
 	 * Total kills received
 	 */
 	int totalKillsReceived;
-<<<<<<< HEAD
-
-=======
-	
->>>>>>> upstream/master
 	
 	/**
 	 * The name that shows up in the ladder
