@@ -28,7 +28,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	// The ship's path updates every this many timesteps
 	static final int PATH_UPDATE_INTERVAL = 10;
 	// Whether or not to draw graphics for debugging pathfinding
-	static final boolean DEBUG_GRAPHICS = false;
+	static final boolean DEBUG_GRAPHICS = true;
 	
 	static final double TRANSLATIONAL_KP = 19.0;
 	static final double ROTATIONAL_KP = 28.0;
@@ -36,22 +36,25 @@ public class BeehaviorTeamClient extends TeamClient {
 	static final double SHOOT_ENEMY_DIST = 500;
 	
 	// Graph to store nodes that represent the environment
+	// TODO: might need 1 per ship to prevent ships from crashing into each other? 
+	// maybe have 1 base graph with most of the obstacles (asteroids, enemy bullets, etc.) and have each ship copy the base graph and add a few things as needed?
 	BeeGraph graph;
 	
 	//For storing path graphics so we only have to create them when a new path is generated
 	HashSet<SpacewarGraphics> pathGraphics;
 	// Store grid graphics so we don't have to re-draw it repeatedly
 	HashSet<SpacewarGraphics> gridGraphics;
-	// Intended to store the paths of multiple ships, more useful for future projects
-	HashMap<Ship, ArrayList<BeeNode>> paths;
-	// Keeps track of targets that each ship is assigned to, more useful with multiple ships
-	HashMap<Ship, AbstractObject> targets;
 	// Stores bee pursuit graphics
 	HashSet<SpacewarGraphics> bpGraphics;
+
+	// Keeps track of targets that each ship is moving to
+	HashMap<Ship, AbstractObject> targets;
+	// Intended to store the path that a ship will take to move to its target
+	HashMap<Ship, ArrayList<BeeNode>> paths;
+	// Ship that is being shot at by each ship
+	HashMap<Ship, Ship> targetShips;
 	// Bee Pursuit - used to move along paths
-	BeePursuit bp;
-	// Ship that is being targeted - used so we know which ship we're shooting at
-	Ship targetShip;
+	HashMap<Ship, BeePursuit> beePursuits;
 	
 	
 	@Override
@@ -91,10 +94,11 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		pathGraphics = new HashSet<SpacewarGraphics>();
 		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
-		bp = new BeePursuit();
+		beePursuits = new HashMap<Ship, BeePursuit>();
 		paths = new HashMap<Ship, ArrayList<BeeNode>>();
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
+		targetShips = new HashMap<Ship, Ship>();
 	}
 
 	@Override
@@ -116,6 +120,8 @@ public class BeehaviorTeamClient extends TeamClient {
 
 		// Update obstructions frequently to make the debug graphics more responsive
 		if (DEBUG_GRAPHICS) {
+			bpGraphics.clear();
+			pathGraphics.clear();
 			// Update obstructions of first half of graph on even timesteps
 			if ((space.getCurrentTimestep() & 1) == 0) {
 				findObstructions(ship.getRadius(), space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
@@ -141,6 +147,9 @@ public class BeehaviorTeamClient extends TeamClient {
 			// Assign actions to living ships
 			if ((actionable instanceof Ship) && actionable.isAlive()) {
 				ship = (Ship) actionable;
+				if (!beePursuits.containsKey(ship)) {
+					beePursuits.put(ship, new BeePursuit());
+				}
 				Position currentPosition = ship.getPosition();
 				// Find new path every so many timesteps
 				if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
@@ -172,15 +181,7 @@ public class BeehaviorTeamClient extends TeamClient {
 						else {
 							path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
 						}
-						// Create new path graphics
-						if (DEBUG_GRAPHICS) {
-							pathGraphics.clear();
-							// Add green circles representing nodes on the path
-							for (BeeNode node : path) {
-								pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
-							}
-						}
-						bp.setPath(path);
+						beePursuits.get(ship).setPath(path);
 						paths.put(ship, path);		
 					}
 					else {
@@ -192,15 +193,14 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				// TODO: Handle multiple agents in the future (multiple BeePursuits?)
 				double radius = 2.0 * GRID_SIZE;
-				bpGraphics.clear();
-				Position goalPos = bp.getDesiredPosition(space, ship.getPosition(), radius);
+				Position goalPos = beePursuits.get(ship).getDesiredPosition(space, ship.getPosition(), radius);
 
 				// Expand radius if we dont find anything
 				int iters = 0;
 				while (goalPos == null && iters < 20) {
 					iters++;
 					radius *= 1.25;
-					goalPos = bp.getDesiredPosition(space, ship.getPosition(), radius);
+					goalPos = beePursuits.get(ship).getDesiredPosition(space, ship.getPosition(), radius);
 				}
 
 				// If we still couldn't find path
@@ -212,7 +212,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				// Add a target graphic at our goal position
 				bpGraphics.add(new TargetGraphics(16, Color.PINK, goalPos));
 				
-				targetShip = null;
+				targetShips.put(ship, null);
 				// If we are low on energy or chasing a core, don't find an enemy ship to target
 				if ((ship.getEnergy() > LOW_ENERGY_THRESH) && !(targets.get(ship) instanceof AiCore)) {
 					// Find the closest enemy ship within a certain (learned) distance
@@ -223,7 +223,7 @@ public class BeehaviorTeamClient extends TeamClient {
 							// Get distance without toroidal wrap because toroidal shooting is hard
 							double distance = new Vector2D(currentPosition).subtract(new Vector2D(otherShip.getPosition())).getMagnitude();
 							if (distance < shipDistance) {
-								targetShip = otherShip;
+								targetShips.put(ship, otherShip);
 								shipDistance = distance;
 							}
 						}
@@ -231,14 +231,14 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 				MoveActionWithOrientation action;
 				// If there's no ship to target, don't worry about orientation
-				if (targetShip == null) {
+				if (targetShips.get(ship) == null) {
 					action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
 					action.setKpRotational(0.0);
 					action.setKvRotational(0.0);
 				}
 				// If there is an enemy ship to target, point at the enemy ship
 				else {
-					Position targetShipPos = targetShip.getPosition();
+					Position targetShipPos = targetShips.get(ship).getPosition();
 					goalPos.setOrientation(new Vector2D(targetShipPos.getX() - currentPosition.getX(),  
 							targetShipPos.getY() - currentPosition.getY()).getAngle());
 					action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
@@ -257,6 +257,17 @@ public class BeehaviorTeamClient extends TeamClient {
 				actions.put(actionable.getId(), new DoNothingAction());
 			}
 		}
+		
+		// Create new path graphics
+		if (DEBUG_GRAPHICS) {
+			// Add green circles representing nodes on the path
+			for (ArrayList<BeeNode> path : paths.values()) {
+				for (BeeNode node : path) {
+					pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
+				}
+			}
+		}
+		
 		return actions;
 	}
 
@@ -350,19 +361,22 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		
 		// Potentially fire every 3 timesteps
-		if ((targetShip != null) && ((space.getCurrentTimestep() % 3) == 0)) {
+		if ((space.getCurrentTimestep() % 3) == 0) {
 			for (AbstractActionableObject actionableObject : actionableObjects){
 				if (actionableObject instanceof Ship) {
-					Position shipPos = actionableObject.getPosition();
-					Position targetShipPos = targetShip.getPosition();
-					// Calculate the difference between the ship's current orientation and the orientation it needs to face the targeted ship
-					double angleDiff = actionableObject.getPosition().getOrientation() - new Vector2D(new Position(targetShipPos.getX() - shipPos.getX(),  
-							targetShipPos.getY() - shipPos.getY())).getAngle();
-					angleDiff = (angleDiff + Math.PI) % (2 * Math.PI) - Math.PI;
-					// If the ship is basically pointing at the targeted ship, fire missiles
-					if (Math.abs(angleDiff) < 0.2) {
-						SpaceSettlersPowerupEnum powerup = SpaceSettlersPowerupEnum.FIRE_MISSILE;
-						powerUps.put(actionableObject.getId(), powerup);
+					Ship ship = (Ship) actionableObject;
+					if (targetShips.get(ship) != null) {
+						Position shipPos = actionableObject.getPosition();
+						Position targetShipPos = targetShips.get(ship).getPosition();
+						// Calculate the difference between the ship's current orientation and the orientation it needs to face the targeted ship
+						double angleDiff = actionableObject.getPosition().getOrientation() - new Vector2D(new Position(targetShipPos.getX() - shipPos.getX(),  
+								targetShipPos.getY() - shipPos.getY())).getAngle();
+						angleDiff = (angleDiff + Math.PI) % (2 * Math.PI) - Math.PI;
+						// If the ship is basically pointing at the targeted ship, fire missiles
+						if (Math.abs(angleDiff) < 0.2) {
+							SpaceSettlersPowerupEnum powerup = SpaceSettlersPowerupEnum.FIRE_MISSILE;
+							powerUps.put(actionableObject.getId(), powerup);
+						}
 					}
 				}
 			}
