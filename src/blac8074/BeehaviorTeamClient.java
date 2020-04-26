@@ -248,8 +248,6 @@ public class BeehaviorTeamClient extends TeamClient {
 				targets.put(ship, target);
 				Position targetPos = target.getPosition();
 
-				// TODO: Make it not touch and teleport the flag??
-
 				// Generate path using A* algorithm
 				if (A_STAR) {
 					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
@@ -301,8 +299,6 @@ public class BeehaviorTeamClient extends TeamClient {
 				targets.put(ship, target);
 				Position targetPos = target.getPosition();
 
-				// TODO: Make it not touch and teleport the flag??
-
 				// Generate path using A* algorithm
 				if (A_STAR) {
 					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
@@ -350,7 +346,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 
 			if (ourFlag == null) {
-				// TODO: This will happen when they have our flag, idk what to do
+				// TODO: This will happen when they have our flag, probably should have ATTACK task
 				// for now, just wander
 				return wanderAction(space, ship);
 			}
@@ -444,7 +440,6 @@ public class BeehaviorTeamClient extends TeamClient {
 		// Always make a move based on last path
 		Position currentPosition = ship.getPosition();
 
-		// TODO: Handle multiple agents in the future (multiple BeePursuits?)
 		double radius = 2.0 * GRID_SIZE;
 		Position goalPos = beePursuits.get(ship).getDesiredPosition(space, ship.getPosition(), radius);
 
