@@ -1,6 +1,6 @@
 package blac8074;
 
-import java.awt.Color;
+import java.awt.*;
 import java.util.*;
 
 import spacesettlers.actions.*;
@@ -28,8 +28,9 @@ public class BeehaviorTeamClient extends TeamClient {
 	// The ship's path updates every this many timesteps
 	static final int PATH_UPDATE_INTERVAL = 10;
 	// Whether or not to draw graphics for debugging pathfinding
-	static final boolean DEBUG_GRAPHICS = true;
-	
+	static final boolean DEBUG_GRAPHICS = false;
+	static final boolean DEBUG_PLANNER = true;
+
 	static final double TRANSLATIONAL_KP = 19.0;
 	static final double ROTATIONAL_KP = 28.0;
 	static final double LOW_ENERGY_THRESH = 2000;
@@ -47,6 +48,9 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Stores bee pursuit graphics
 	HashSet<SpacewarGraphics> bpGraphics;
 
+	// Stores planner graphics
+	HashSet<SpacewarGraphics> plannerGraphics;
+
 	// Keeps track of targets that each ship is moving to
 	HashMap<Ship, AbstractObject> targets;
 	// Intended to store the path that a ship will take to move to its target
@@ -55,6 +59,8 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashMap<Ship, Ship> targetShips;
 	// Bee Pursuit - used to move along paths
 	HashMap<Ship, BeePursuit> beePursuits;
+
+	BeePlanner planner;
 	
 	
 	@Override
@@ -99,6 +105,8 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
 		targetShips = new HashMap<Ship, Ship>();
+		planner = new BeePlanner();
+		plannerGraphics = new HashSet<>();
 	}
 
 	@Override
@@ -110,10 +118,10 @@ public class BeehaviorTeamClient extends TeamClient {
 	public Map<UUID, AbstractAction> getMovementStart(Toroidal2DPhysics space,
 			Set<AbstractActionableObject> actionableObjects) {
 		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();		
-		Ship ship = null;
+		Ship exampleShip = null;
 		for (AbstractActionableObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
-				ship = (Ship) actionable;
+				exampleShip = (Ship) actionable;
 				break;
 			}
 		}
@@ -124,138 +132,88 @@ public class BeehaviorTeamClient extends TeamClient {
 			pathGraphics.clear();
 			// Update obstructions of first half of graph on even timesteps
 			if ((space.getCurrentTimestep() & 1) == 0) {
-				findObstructions(ship.getRadius(), space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
+				findObstructions(exampleShip.getRadius(), space, exampleShip.getTeamName(), 0, graph.getSize() / 2 - 1);
 			}
 			// Update obstructions of last half of graph on odd timesteps
 			else {
-				findObstructions(ship.getRadius(), space, ship.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
+				findObstructions(exampleShip.getRadius(), space, exampleShip.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
 			}
 		}
 		// Update obstructions only once before calculating new path
 		else {
 			// Update obstructions of first half of graph 1 timestep before the path is calculated
 			if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == (PATH_UPDATE_INTERVAL - 1)) {
-				findObstructions(ship.getRadius(), space, ship.getTeamName(), 0, graph.getSize() / 2 - 1);
+				findObstructions(exampleShip.getRadius(), space, exampleShip.getTeamName(), 0, graph.getSize() / 2 - 1);
 			}
 			// Update obstructions of last half two timesteps before the path is calculated
 			else if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == (PATH_UPDATE_INTERVAL - 2)) {
-				findObstructions(ship.getRadius(), space, ship.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
+				findObstructions(exampleShip.getRadius(), space, exampleShip.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
 			}
 		}
+
+		if (DEBUG_PLANNER) {
+			plannerGraphics.clear();
+		}
+
+		boolean isSomeoneCarryingTheFlag = false;
+
+		Map<Ship, BeePlanner.BeeTask> shipTasks = new HashMap<>();
 		
 		for (AbstractObject actionable :  actionableObjects) {
 			// Assign actions to living ships
 			if ((actionable instanceof Ship) && actionable.isAlive()) {
-				ship = (Ship) actionable;
+				Ship ship = (Ship) actionable;
+
 				if (!beePursuits.containsKey(ship)) {
 					beePursuits.put(ship, new BeePursuit());
 				}
-				Position currentPosition = ship.getPosition();
-				// Find new path every so many timesteps
-				if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
-					ArrayList<BeeNode> path;
-					AbstractObject target = findTarget(ship, space);
-					// If we have a valid target
-					if (target != null) {
-						targets.put(ship, target);
-						Position targetPos = target.getPosition();
-						// Avoid crashing into the target ship
-						if (target instanceof Ship) {
-							if (space.findShortestDistance(ship.getPosition(), target.getPosition()) < (3 * ship.getRadius())) {
-								targetPos = ship.getPosition();
-							}
-						}
-						else {
-							// Aim ahead of a moving target
-							if (target.isMoveable()) {
-								targetPos = new Position(targetPos.getX() + targetPos.getxVelocity(), targetPos.getY() + targetPos.getyVelocity());
-								space.toroidalWrap(targetPos);
-							}
-						}
-						
-						// Generate path using A* algorithm
-						if (A_STAR) {
-							path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
-						}
-						// Generate path using other algorithm (hill climbing)
-						else {
-							path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
-						}
-						beePursuits.get(ship).setPath(path);
-						paths.put(ship, path);		
-					}
-					else {
-						actions.put(actionable.getId(), new DoNothingAction());
-					}
+
+				isSomeoneCarryingTheFlag = isSomeoneCarryingTheFlag || ship.isCarryingFlag();
+
+				BeePlanner.BeeTask task = planner.getTask(ship);
+
+				if (DEBUG_PLANNER) {
+					plannerGraphics.add(new TaskGraphics(ship, task));
 				}
 
-				// Always make a move based on last path
-
-				// TODO: Handle multiple agents in the future (multiple BeePursuits?)
-				double radius = 2.0 * GRID_SIZE;
-				Position goalPos = beePursuits.get(ship).getDesiredPosition(space, ship.getPosition(), radius);
-
-				// Expand radius if we dont find anything
-				int iters = 0;
-				while (goalPos == null && iters < 20) {
-					iters++;
-					radius *= 1.25;
-					goalPos = beePursuits.get(ship).getDesiredPosition(space, ship.getPosition(), radius);
-				}
-
-				// If we still couldn't find path
-				if (iters >= 20) {
-					actions.put(actionable.getId(), new DoNothingAction());
-					continue;
-				}
-
-				// Add a target graphic at our goal position
-				bpGraphics.add(new TargetGraphics(16, Color.PINK, goalPos));
-				
-				targetShips.put(ship, null);
-				// If we are low on energy or chasing a core, don't find an enemy ship to target
-				if ((ship.getEnergy() > LOW_ENERGY_THRESH) && !(targets.get(ship) instanceof AiCore)) {
-					// Find the closest enemy ship within a certain (learned) distance
-					double shipDistance = SHOOT_ENEMY_DIST;
-					for (Ship otherShip : space.getShips()) {
-						// If the other ship is an enemy ship
-						if (!otherShip.getTeamName().equals(ship.getTeamName())) {
-							// Get distance without toroidal wrap because toroidal shooting is hard
-							double distance = new Vector2D(currentPosition).subtract(new Vector2D(otherShip.getPosition())).getMagnitude();
-							if (distance < shipDistance) {
-								targetShips.put(ship, otherShip);
-								shipDistance = distance;
-							}
-						}
-					}
-				}
-				MoveActionWithOrientation action;
-				// If there's no ship to target, don't worry about orientation
-				if (targetShips.get(ship) == null) {
-					action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
-					action.setKpRotational(0.0);
-					action.setKvRotational(0.0);
-				}
-				// If there is an enemy ship to target, point at the enemy ship
-				else {
-					Position targetShipPos = targetShips.get(ship).getPosition();
-					goalPos.setOrientation(new Vector2D(targetShipPos.getX() - currentPosition.getX(),  
-							targetShipPos.getY() - currentPosition.getY()).getAngle());
-					action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
-					action.setKpRotational(ROTATIONAL_KP);
-					action.setKvRotational(2 * Math.sqrt(ROTATIONAL_KP));
-				}
-
-				action.setKpTranslational(TRANSLATIONAL_KP);
-				action.setKvTranslational(2 * Math.sqrt(TRANSLATIONAL_KP));
-
-				//currScore += ship.getPosition().getTranslationalVelocity().getMagnitude() / 100f;
-
-				actions.put(actionable.getId(), action);
+				shipTasks.put(ship, task);
 			}
 			else {
 				actions.put(actionable.getId(), new DoNothingAction());
 			}
+		}
+
+		// Apply actions after we assign tasks in the previous loop
+		for (Ship ship : shipTasks.keySet()) {
+			BeePlanner.BeeTask task = shipTasks.get(ship);
+			switch (task) {
+				case FIND_ENEMY_FLAG:
+					actions.put(ship.getId(), findEnemyFlagAction(space, ship));
+					break;
+				case RETURN_ENEMY_FLAG:
+					actions.put(ship.getId(), returnEnemyFlagAction(space, ship));
+					break;
+				case FIND_ALLY_FLAG:
+					actions.put(ship.getId(), findAllyFlagAction(space, ship));
+					break;
+				case GUARD:
+					actions.put(ship.getId(), guardAction(space, ship));
+					break;
+				case PROTECT:
+					actions.put(ship.getId(), protectAction(space, ship));
+					break;
+				case WANDER:
+					actions.put(ship.getId(), wanderAction(space, ship));
+					break;
+				default:
+					actions.put(ship.getId(), new DoNothingAction());
+			}
+		}
+
+		// Sometimes the "carrying enemy flag" flag isn't set right (usually because of death)
+		// So set it correct here
+		if (!isSomeoneCarryingTheFlag) {
+			planner.setCarryingEnemyFlag(false);
 		}
 		
 		// Create new path graphics
@@ -269,6 +227,281 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		
 		return actions;
+	}
+
+	private AbstractAction findEnemyFlagAction(Toroidal2DPhysics space, Ship ship) {
+		Position currentPosition = ship.getPosition();
+		// Find new path every so many timesteps
+		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
+			ArrayList<BeeNode> path;
+			AbstractObject target = null;
+
+			for (Flag flag : space.getFlags()) {
+				if (!flag.getTeamName().equals(ship.getTeamName())) {
+					target = flag;
+					break;
+				}
+			}
+
+			// If we have a valid target
+			if (target != null) {
+				targets.put(ship, target);
+				Position targetPos = target.getPosition();
+
+				// TODO: Make it not touch and teleport the flag??
+
+				// Generate path using A* algorithm
+				if (A_STAR) {
+					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				// Generate path using other algorithm (hill climbing)
+				else {
+					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				beePursuits.get(ship).setPath(path);
+				paths.put(ship, path);
+			}
+			else {
+				return new DoNothingAction();
+			}
+		}
+
+		if (ship.isCarryingFlag()) {
+			planner.setCarryingEnemyFlag(true);
+			planner.finishTask(ship);
+		}
+
+		return getMoveFromBeePursuit(space, ship);
+	}
+
+	private AbstractAction returnEnemyFlagAction(Toroidal2DPhysics space, Ship ship) {
+		Position currentPosition = ship.getPosition();
+		// Find new path every so many timesteps
+		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
+			ArrayList<BeeNode> path;
+			AbstractObject target = null;
+
+			Base closestBase = pickNearestFriendlyBase(space, ship);
+
+			if (closestBase == null) {
+				// probably should never happen
+				System.out.println("SOMETHING THAT NEVER SHOULD HAVE HAPPENED... HAPPENED");
+				return new DoNothingAction();
+			}
+
+			target = closestBase;
+
+			if (space.findShortestDistance(closestBase.getPosition(), ship.getPosition()) < 50) { // TODO: what is the actual range for this
+				ship.getFlag().depositFlag();
+				planner.finishTask(ship);
+			}
+
+			// If we have a valid target
+			if (target != null) {
+				targets.put(ship, target);
+				Position targetPos = target.getPosition();
+
+				// TODO: Make it not touch and teleport the flag??
+
+				// Generate path using A* algorithm
+				if (A_STAR) {
+					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				// Generate path using other algorithm (hill climbing)
+				else {
+					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				beePursuits.get(ship).setPath(path);
+				paths.put(ship, path);
+			}
+			else {
+				return new DoNothingAction();
+			}
+		}
+
+		// If we somehow lost the flag?
+		if (!ship.isCarryingFlag()) {
+			planner.setCarryingEnemyFlag(false);
+			planner.finishTask(ship);
+		}
+
+		return getMoveFromBeePursuit(space, ship);
+	}
+
+	private AbstractAction findAllyFlagAction(Toroidal2DPhysics space, Ship ship) {
+		return new DoNothingAction();
+	}
+
+	private AbstractAction guardAction(Toroidal2DPhysics space, Ship ship) {
+		Position currentPosition = ship.getPosition();
+		// Find new path every so many timesteps
+		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
+			ArrayList<BeeNode> path;
+
+			Flag ourFlag = null;
+
+			AbstractObject target = null;
+
+			for (Flag flag : space.getFlags()) {
+				if (flag.getTeamName().equals(ship.getTeamName())) {
+					ourFlag = flag;
+					break;
+				}
+			}
+
+			if (ourFlag == null) {
+				// TODO: This will happen when they have our flag, idk what to do
+				// for now, just wander
+				return wanderAction(space, ship);
+			}
+
+			// Target nearest enemy
+			// TODO: Make it not leave a radius of the flag or something like that
+			target = pickNearestEnemyToPosition(space, ship, ourFlag.getPosition());
+
+			// If we have a valid target
+			if (target != null) {
+				targets.put(ship, target);
+				Position targetPos = target.getPosition();
+
+				if (space.findShortestDistance(ship.getPosition(), target.getPosition()) < (3 * ship.getRadius())) {
+					targetPos = ship.getPosition();
+				}
+
+				// Generate path using A* algorithm
+				if (A_STAR) {
+					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				// Generate path using other algorithm (hill climbing)
+				else {
+					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				beePursuits.get(ship).setPath(path);
+				paths.put(ship, path);
+			}
+			else {
+				return new DoNothingAction();
+			}
+		}
+
+		// The Guard task is only valid for 1 tick
+		planner.finishTask(ship);
+
+		return getMoveFromBeePursuit(space, ship);
+	}
+
+	private AbstractAction protectAction(Toroidal2DPhysics space, Ship ship) {
+		return guardAction(space, ship); // TODO: Make actual protect action
+	}
+
+	private AbstractAction wanderAction(Toroidal2DPhysics space, Ship ship) {
+		Position currentPosition = ship.getPosition();
+		// Find new path every so many timesteps
+		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
+			ArrayList<BeeNode> path;
+			AbstractObject target = findTarget(ship, space);
+			// If we have a valid target
+			if (target != null) {
+				targets.put(ship, target);
+				Position targetPos = target.getPosition();
+				// Avoid crashing into the target ship
+				if (target instanceof Ship) {
+					if (space.findShortestDistance(ship.getPosition(), target.getPosition()) < (3 * ship.getRadius())) {
+						targetPos = ship.getPosition();
+					}
+				}
+				else {
+					// Aim ahead of a moving target
+					if (target.isMoveable()) {
+						targetPos = new Position(targetPos.getX() + targetPos.getxVelocity(), targetPos.getY() + targetPos.getyVelocity());
+						space.toroidalWrap(targetPos);
+					}
+				}
+
+				// Generate path using A* algorithm
+				if (A_STAR) {
+					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				// Generate path using other algorithm (hill climbing)
+				else {
+					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				beePursuits.get(ship).setPath(path);
+				paths.put(ship, path);
+			}
+			else {
+				return new DoNothingAction();
+			}
+		}
+
+		// The wandering task is only valid for 1 tick
+		planner.finishTask(ship);
+
+		return getMoveFromBeePursuit(space, ship);
+	}
+
+	public AbstractAction getMoveFromBeePursuit(Toroidal2DPhysics space, Ship ship) {
+		// Always make a move based on last path
+		Position currentPosition = ship.getPosition();
+
+		// TODO: Handle multiple agents in the future (multiple BeePursuits?)
+		double radius = 2.0 * GRID_SIZE;
+		Position goalPos = beePursuits.get(ship).getDesiredPosition(space, ship.getPosition(), radius);
+
+		// Expand radius if we dont find anything
+		int iters = 0;
+		while (goalPos == null && iters < 20) {
+			iters++;
+			radius *= 1.25;
+			goalPos = beePursuits.get(ship).getDesiredPosition(space, ship.getPosition(), radius);
+		}
+
+		// If we still couldn't find path
+		if (iters >= 20) {
+			return new DoNothingAction();
+		}
+
+		// Add a target graphic at our goal position
+		bpGraphics.add(new TargetGraphics(16, Color.PINK, goalPos));
+
+		targetShips.put(ship, null);
+		// If we are low on energy or chasing a core, don't find an enemy ship to target
+		if ((ship.getEnergy() > LOW_ENERGY_THRESH) && !(targets.get(ship) instanceof AiCore)) {
+			// Find the closest enemy ship within a certain (learned) distance
+			double shipDistance = SHOOT_ENEMY_DIST;
+			for (Ship otherShip : space.getShips()) {
+				// If the other ship is an enemy ship
+				if (!otherShip.getTeamName().equals(ship.getTeamName())) {
+					// Get distance without toroidal wrap because toroidal shooting is hard
+					double distance = new Vector2D(currentPosition).subtract(new Vector2D(otherShip.getPosition())).getMagnitude();
+					if (distance < shipDistance) {
+						targetShips.put(ship, otherShip);
+						shipDistance = distance;
+					}
+				}
+			}
+		}
+		MoveActionWithOrientation action;
+		// If there's no ship to target, don't worry about orientation
+		if (targetShips.get(ship) == null) {
+			action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
+			action.setKpRotational(0.0);
+			action.setKvRotational(0.0);
+		}
+		// If there is an enemy ship to target, point at the enemy ship
+		else {
+			Position targetShipPos = targetShips.get(ship).getPosition();
+			goalPos.setOrientation(new Vector2D(targetShipPos.getX() - currentPosition.getX(),
+					targetShipPos.getY() - currentPosition.getY()).getAngle());
+			action = new MoveActionWithOrientation(space, ship.getPosition(), goalPos);
+			action.setKpRotational(ROTATIONAL_KP);
+			action.setKvRotational(2 * Math.sqrt(ROTATIONAL_KP));
+		}
+
+		action.setKpTranslational(TRANSLATIONAL_KP);
+		action.setKvTranslational(2 * Math.sqrt(TRANSLATIONAL_KP));
+
+		return action;
 	}
 
 	@Override
@@ -292,6 +525,11 @@ public class BeehaviorTeamClient extends TeamClient {
 			// Add graphics showing where on the path we are aiming
 			graphics.addAll(bpGraphics);
 		}
+
+		if (DEBUG_PLANNER) {
+			// Draw current tasks
+			graphics.addAll(plannerGraphics);
+		}
 		return graphics;
 	}
 
@@ -304,7 +542,7 @@ public class BeehaviorTeamClient extends TeamClient {
 
 		HashMap<UUID, PurchaseTypes> purchases = new HashMap<UUID, PurchaseTypes>();
 		double BASE_BUYING_DISTANCE = 400;
-		
+
 		// Buy a double max energy powerup if we can afford it
 		if (purchaseCosts.canAfford(PurchaseTypes.POWERUP_DOUBLE_MAX_ENERGY, resourcesAvailable)) {
 			for (AbstractActionableObject actionableObject : actionableObjects) {
@@ -516,13 +754,20 @@ public class BeehaviorTeamClient extends TeamClient {
 	 * Find the nearest enemy ship
 	 */
 	private Ship pickNearestEnemy(Toroidal2DPhysics space, Ship ship) {
+		return pickNearestEnemyToPosition(space, ship, ship.getPosition());
+	}
+
+	/*
+	 * Find the nearest enemy ship to a position
+	 */
+	private Ship pickNearestEnemyToPosition(Toroidal2DPhysics space, Ship ship, Position position) {
 		double bestDistance = Double.POSITIVE_INFINITY;
 		Ship closestEnemy = null;
 		for (Ship otherShip : space.getShips()) {
 			// If the other ship is a living enemy ship
 			if (!otherShip.getTeamName().equalsIgnoreCase(ship.getTeamName()) && otherShip.isAlive()) {
 				// Get distance without toroidal wrap because toroidal shooting is hard
-				double distance = space.findShortestDistance(ship.getPosition(), otherShip.getPosition());
+				double distance = space.findShortestDistance(position, otherShip.getPosition());
 				if (distance < bestDistance) {
 					bestDistance = distance;
 					closestEnemy = otherShip;
@@ -553,7 +798,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		return grid;
 	}
-	
+
 	// Converts a position to the index of the grid square that contains that position
 	private int positionToNodeIndex(Position position) {
 		int x = (int)(position.getX() / GRID_SIZE);
@@ -565,7 +810,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	 * Check each grid square to see if it contains an obstacle or is near enough to an obstacle
 	 * If it is, obstruct the corresponding node
 	 * If not, unobstruct the corresponding node
-	 * 
+	 *
 	 * Obstacles currently include: non-mineable asteroids, bases, enemy ships, weapon projectiles
 	 */
 	public void findObstructions(int radius, Toroidal2DPhysics space, String teamName, int startIndex, int stopIndex) {
@@ -584,7 +829,7 @@ public class BeehaviorTeamClient extends TeamClient {
 					// Check if asteroid is moving towards the current node
 					if (asteroid.isMoveable()) {
 						// Note: this may not completely work if the asteroid is moving very fast
-						Position futurePos = new Position(asteroid.getPosition().getX() + asteroid.getPosition().getxVelocity(), 
+						Position futurePos = new Position(asteroid.getPosition().getX() + asteroid.getPosition().getxVelocity(),
 								asteroid.getPosition().getY() + asteroid.getPosition().getyVelocity());
 						if (space.findShortestDistanceVector(futurePos, graph.getNode(nodeIndex).getPosition())
 								.getMagnitude() <= (radius + (2 * asteroid.getRadius()))) {

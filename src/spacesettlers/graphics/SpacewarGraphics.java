@@ -1,6 +1,8 @@
 package spacesettlers.graphics;
 
 import java.awt.Graphics2D;
+
+import spacesettlers.objects.Ship;
 import spacesettlers.utilities.Position;
 
 /**
@@ -34,7 +36,7 @@ abstract public class SpacewarGraphics {
 		this.height = height;
 		this.width = width;
 	}
-	
+
 	/**
 	 * Return the actual location of the object
 	 * 
