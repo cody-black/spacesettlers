@@ -28,16 +28,18 @@ public class BeePlanner {
     public void assignTask(Ship ship) {
         BeeTask assignedTask = BeeTask.WANDER;
 
-        if (!isGuarding) {
+        if (ship.isCarryingFlag()) {
+        	// This ship is carrying the flag, it needs to return it
+        	assignedTask = BeeTask.RETURN_ENEMY_FLAG;
+        }
+        else if (!isGuarding) {
             // No one is guarding, we should guard!
             assignedTask = BeeTask.GUARD;
         } else if (!isCarryingEnemyFlag && !isFindingEnemyFlag) {
             // No one has the flag and we aren't looking for it, let's go get it
             assignedTask = BeeTask.FIND_ENEMY_FLAG;
-        } else if (isCarryingEnemyFlag && ship.isCarryingFlag()) {
-            // We have the flag and it's this ship that has it, return it
-            assignedTask = BeeTask.RETURN_ENEMY_FLAG;
-        } else if (isCarryingEnemyFlag) {
+        }	
+        else if (isCarryingEnemyFlag) {
             // We have the flag and it's not this ship, go help him out!
             assignedTask = BeeTask.PROTECT;
         }
@@ -49,7 +51,9 @@ public class BeePlanner {
                 isFindingEnemyFlag = true;
                 break;
             case RETURN_ENEMY_FLAG:
-                break;
+            	isCarryingEnemyFlag = true;
+            	isFindingEnemyFlag = false;
+            	break;
             case FIND_ALLY_FLAG:
                 break;
             case GUARD:
@@ -85,7 +89,7 @@ public class BeePlanner {
     }
 
     public BeeTask getTask(Ship ship) {
-        if (!assignedTasks.containsKey(ship)) {
+        if (!assignedTasks.containsKey(ship) || ship.isCarryingFlag()) {
             assignTask(ship);
         }
 

@@ -225,7 +225,6 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 		}
-		
 		return actions;
 	}
 
@@ -264,7 +263,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 
-		if (ship.isCarryingFlag()) {
+		if (ship.isCarryingFlag() || planner.isCarryingEnemyFlag == true) {
 			planner.setCarryingEnemyFlag(true);
 			planner.finishTask(ship);
 		}
@@ -289,8 +288,16 @@ public class BeehaviorTeamClient extends TeamClient {
 
 			target = closestBase;
 
+			// Looks like the flag is automatically deposited when the ship bumps the base
+			/*
 			if (space.findShortestDistance(closestBase.getPosition(), ship.getPosition()) < 50) { // TODO: what is the actual range for this
 				ship.getFlag().depositFlag();
+				planner.finishTask(ship);
+			}
+			*/
+			// Finish task when ship is no longer carrying flag (returned it to base or died and dropped it)
+			if (!ship.isCarryingFlag()) {
+				planner.setCarryingEnemyFlag(false);
 				planner.finishTask(ship);
 			}
 
@@ -313,12 +320,6 @@ public class BeehaviorTeamClient extends TeamClient {
 			else {
 				return new DoNothingAction();
 			}
-		}
-
-		// If we somehow lost the flag?
-		if (!ship.isCarryingFlag()) {
-			planner.setCarryingEnemyFlag(false);
-			planner.finishTask(ship);
 		}
 
 		return getMoveFromBeePursuit(space, ship);
