@@ -8,10 +8,12 @@ import java.util.Map;
 public class BeePlanner {
     public enum BeeTask {
         FIND_ENEMY_FLAG, // Ship should move towards the enemy flag
-        RETURN_ENEMY_FLAG, // Ship with flag should head to base
+        RETURN_TO_BASE, // Ship with flag should head to base
         FIND_ALLY_FLAG, // If our flag is gone, Ship should return it (?)
         GUARD, // Ship should protect our flag
         PROTECT, // Ship should protect flag carrier
+        GET_ENERGY, // Ship should travel to closest beacon or base to get more energy
+        GET_RESOURCES, // Ship should pick up nearest resource asteroid
         WANDER // Project 2 behaviour
     }
 
@@ -29,8 +31,10 @@ public class BeePlanner {
         BeeTask assignedTask = BeeTask.WANDER;
 
         if (ship.isCarryingFlag()) {
-        	// This ship is carrying the flag, it needs to return it
-        	assignedTask = BeeTask.RETURN_ENEMY_FLAG;
+        	// This ship is carrying the flag, it needs to return it to a base
+        	assignedTask = BeeTask.RETURN_TO_BASE;
+        	isFindingEnemyFlag = false;
+        	isCarryingEnemyFlag = true;
         }
         else if (!isGuarding) {
             // No one is guarding, we should guard!
@@ -50,9 +54,7 @@ public class BeePlanner {
             case FIND_ENEMY_FLAG:
                 isFindingEnemyFlag = true;
                 break;
-            case RETURN_ENEMY_FLAG:
-            	isCarryingEnemyFlag = true;
-            	isFindingEnemyFlag = false;
+            case RETURN_TO_BASE:
             	break;
             case FIND_ALLY_FLAG:
                 break;
@@ -61,6 +63,10 @@ public class BeePlanner {
                 break;
             case PROTECT:
                 break;
+            case GET_ENERGY:
+            	break;
+            case GET_RESOURCES:
+            	break;
             case WANDER:
                 break;
         }
@@ -73,8 +79,7 @@ public class BeePlanner {
             case FIND_ENEMY_FLAG:
                 isFindingEnemyFlag = false;
                 break;
-            case RETURN_ENEMY_FLAG:
-                isCarryingEnemyFlag = false;
+            case RETURN_TO_BASE:
                 break;
             case FIND_ALLY_FLAG:
                 break;
@@ -83,6 +88,10 @@ public class BeePlanner {
                 break;
             case PROTECT:
                 break;
+            case GET_ENERGY:
+            	break;
+            case GET_RESOURCES:
+            	break;
             case WANDER:
                 break;
         }
@@ -99,4 +108,14 @@ public class BeePlanner {
     public void setCarryingEnemyFlag(boolean carryingEnemyFlag) {
         isCarryingEnemyFlag = carryingEnemyFlag;
     }
+    
+    /**
+     * Returns true if the given ship is allowed to shoot, false if it isn't
+     */
+	public boolean shipCanShoot(Ship ship) {
+		boolean canShoot = getTask(ship) != BeeTask.FIND_ENEMY_FLAG; // Ship is not going for enemy flag
+		canShoot = canShoot && !ship.isCarryingFlag(); // Ship is not carrying enemy flag
+		canShoot = canShoot && getTask(ship) != BeeTask.GET_ENERGY; // Ship is not going to get more energy
+		return canShoot;
+	}
 }
