@@ -1,6 +1,10 @@
 package blac8074;
 
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
 import java.util.*;
 
 import spacesettlers.actions.*;
@@ -40,7 +44,6 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Graph to store nodes that represent the environment
 	// TODO: might need 1 per ship to prevent ships from crashing into each other? 
 	// maybe have 1 base graph with most of the obstacles (asteroids, enemy bullets, etc.) and have each ship copy the base graph and add a few things as needed?
-	BeeGraph graph;
 	
 	//For storing path graphics so we only have to create them when a new path is generated
 	HashSet<SpacewarGraphics> pathGraphics;
@@ -60,45 +63,20 @@ public class BeehaviorTeamClient extends TeamClient {
 	HashMap<Ship, Ship> targetShips;
 	// Bee Pursuit - used to move along paths
 	HashMap<Ship, BeePursuit> beePursuits;
+	
+	HashMap<Ship, BeeGraph> graphs;
 
 	BeePlanner planner;
+	
+	BeeMouseListener mouseListener;
+	
+	Ship clickedShip;
+	
+	Toroidal2DPhysics globalSpace;
 	
 	
 	@Override
 	public void initialize(Toroidal2DPhysics space) {
-		// Number of grid squares in x dimension
-		int numSquaresX = space.getWidth() / (int)GRID_SIZE;
-		// Number of grid squares in y dimension
-		int numSquaresY = space.getHeight() / (int)GRID_SIZE;
-		graph = new BeeGraph(numSquaresX * numSquaresY, numSquaresY, numSquaresX, GRID_SIZE);
-		BeeNode node;
-		for (int i = 0; i < graph.getSize(); i++) {
-			int x = i % numSquaresX;
-			int y = i / numSquaresX;
-			Position nodePos = new Position(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE + GRID_SIZE / 2);
-			node = new BeeNode(nodePos);
-			graph.addNode(i, node);
-			//System.out.println("Created node " + i +  " at: " + node.getPosition());
-		}
-
-		// Add adjacent nodes to each node
-		for (int i = 0; i < graph.getSize(); i++) {
-			double distance;
-			int[] adjacent = graph.findAdjacentIndices(i);
-			node = graph.getNode(i);
-			// Add edge costs for each adjacent node
-			for (int j = 0; j < adjacent.length; j++) {
-				if (j < 4) {
-					distance = GRID_SIZE;
-				}
-				else {
-					// a == b => c = sqrt(a^2 + b^2) = sqrt(2 * a^2) = sqrt(2 * a * a)
-					distance = Math.sqrt(2 * GRID_SIZE * GRID_SIZE); 
-				}
-				node.addAdjacent(graph.getNode(adjacent[j]), distance);
-				//System.out.println("Add adjacent node " + adjacent[j] + " to node " + i + " with distance " + distance);
-			}
-		}
 		pathGraphics = new HashSet<SpacewarGraphics>();
 		gridGraphics = drawGrid(new Position(0, 0), GRID_SIZE, 1080, 1600, Color.GRAY);
 		beePursuits = new HashMap<Ship, BeePursuit>();
@@ -106,8 +84,11 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
 		targetShips = new HashMap<Ship, Ship>();
+		graphs = new HashMap<Ship, BeeGraph>();
 		planner = new BeePlanner(LOW_ENERGY_THRESH);
 		plannerGraphics = new HashSet<>();
+		mouseListener = new BeeMouseListener(space);
+		clickedShip = null;
 	}
 
 	@Override
@@ -118,7 +99,8 @@ public class BeehaviorTeamClient extends TeamClient {
 	@Override
 	public Map<UUID, AbstractAction> getMovementStart(Toroidal2DPhysics space,
 			Set<AbstractActionableObject> actionableObjects) {
-		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();		
+		HashMap<UUID, AbstractAction> actions = new HashMap<UUID, AbstractAction>();
+		globalSpace = space;
 		Ship exampleShip = null;
 		for (AbstractActionableObject actionable :  actionableObjects) {
 			if (actionable instanceof Ship) {
@@ -126,31 +108,8 @@ public class BeehaviorTeamClient extends TeamClient {
 				break;
 			}
 		}
-
-		// Update obstructions frequently to make the debug graphics more responsive
-		if (DEBUG_PATH) {
-			bpGraphics.clear();
-			pathGraphics.clear();
-			// Update obstructions of first half of graph on even timesteps
-			if ((space.getCurrentTimestep() & 1) == 0) {
-				findObstructions(exampleShip.getRadius(), space, exampleShip.getTeamName(), 0, graph.getSize() / 2 - 1);
-			}
-			// Update obstructions of last half of graph on odd timesteps
-			else {
-				findObstructions(exampleShip.getRadius(), space, exampleShip.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
-			}
-		}
-		// Update obstructions only once before calculating new path
-		else {
-			// Update obstructions of first half of graph 1 timestep before the path is calculated
-			if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == (PATH_UPDATE_INTERVAL - 1)) {
-				findObstructions(exampleShip.getRadius(), space, exampleShip.getTeamName(), 0, graph.getSize() / 2 - 1);
-			}
-			// Update obstructions of last half two timesteps before the path is calculated
-			else if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == (PATH_UPDATE_INTERVAL - 2)) {
-				findObstructions(exampleShip.getRadius(), space, exampleShip.getTeamName(), graph.getSize() / 2, graph.getSize() - 1);
-			}
-		}
+		
+		
 
 		if (DEBUG_PLANNER) {
 			plannerGraphics.clear();
@@ -165,6 +124,69 @@ public class BeehaviorTeamClient extends TeamClient {
 			if ((actionable instanceof Ship) && actionable.isAlive()) {
 				Ship ship = (Ship) actionable;
 
+				if (!graphs.containsKey(ship)) {
+					BeeGraph newGraph;
+					// Number of grid squares in x dimension
+					int numSquaresX = space.getWidth() / (int)GRID_SIZE;
+					// Number of grid squares in y dimension
+					int numSquaresY = space.getHeight() / (int)GRID_SIZE;
+					newGraph = new BeeGraph(numSquaresX * numSquaresY, numSquaresY, numSquaresX, GRID_SIZE);
+					BeeNode node;
+					for (int i = 0; i < newGraph.getSize(); i++) {
+						int x = i % numSquaresX;
+						int y = i / numSquaresX;
+						Position nodePos = new Position(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE + GRID_SIZE / 2);
+						node = new BeeNode(nodePos);
+						newGraph.addNode(i, node);
+						//System.out.println("Created node " + i +  " at: " + node.getPosition());
+					}
+
+					// Add adjacent nodes to each node
+					for (int i = 0; i < newGraph.getSize(); i++) {
+						double distance;
+						int[] adjacent = newGraph.findAdjacentIndices(i);
+						node = newGraph.getNode(i);
+						// Add edge costs for each adjacent node
+						for (int j = 0; j < adjacent.length; j++) {
+							if (j < 4) {
+								distance = GRID_SIZE;
+							}
+							else {
+								// a == b => c = sqrt(a^2 + b^2) = sqrt(2 * a^2) = sqrt(2 * a * a)
+								distance = Math.sqrt(2 * GRID_SIZE * GRID_SIZE); 
+							}
+							node.addAdjacent(newGraph.getNode(adjacent[j]), distance);
+							//System.out.println("Add adjacent node " + adjacent[j] + " to node " + i + " with distance " + distance);
+						}
+					}
+					graphs.put(ship, newGraph);
+				}
+
+				// Update obstructions frequently to make the debug graphics more responsive
+				if (DEBUG_PATH) {
+					bpGraphics.clear();
+					pathGraphics.clear();
+					// Update obstructions of first half of graph on even timesteps
+					if ((space.getCurrentTimestep() & 1) == 0) {
+						findObstructions(exampleShip.getRadius(), space, ship, 0, graphs.get(ship).getSize() / 2 - 1);
+					}
+					// Update obstructions of last half of graph on odd timesteps
+					else {
+						findObstructions(exampleShip.getRadius(), space, ship, graphs.get(ship).getSize() / 2, graphs.get(ship).getSize() - 1);
+					}
+				}
+				// Update obstructions only once before calculating new path
+				else {
+					// Update obstructions of first half of graph 1 timestep before the path is calculated
+					if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == (PATH_UPDATE_INTERVAL - 1)) {
+						findObstructions(exampleShip.getRadius(), space, ship, 0, graphs.get(ship).getSize() / 2 - 1);
+					}
+					// Update obstructions of last half two timesteps before the path is calculated
+					else if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == (PATH_UPDATE_INTERVAL - 2)) {
+						findObstructions(exampleShip.getRadius(), space, ship, graphs.get(ship).getSize() / 2, graphs.get(ship).getSize() - 1);
+					}
+				}
+				
 				if (!beePursuits.containsKey(ship)) {
 					beePursuits.put(ship, new BeePursuit());
 				}
@@ -221,16 +243,6 @@ public class BeehaviorTeamClient extends TeamClient {
 		if (!isSomeoneCarryingTheFlag) {
 			planner.setCarryingEnemyFlag(false);
 		}
-		
-		// Create new path graphics
-		if (DEBUG_PATH) {
-			// Add green circles representing nodes on the path
-			for (ArrayList<BeeNode> path : paths.values()) {
-				for (BeeNode node : path) {
-					pathGraphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
-				}
-			}
-		}
 		return actions;
 	}
 
@@ -255,11 +267,11 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				// Generate path using A* algorithm
 				if (A_STAR) {
-					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getAStarPath(positionToNodeIndex(currentPosition, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				// Generate path using other algorithm (hill climbing)
 				else {
-					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getHillClimbingPath(positionToNodeIndex(currentPosition, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				beePursuits.get(ship).setPath(path);
 				paths.put(ship, path);
@@ -302,11 +314,11 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				// Generate path using A* algorithm
 				if (A_STAR) {
-					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getAStarPath(positionToNodeIndex(currentPosition, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				// Generate path using other algorithm (hill climbing)
 				else {
-					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getHillClimbingPath(positionToNodeIndex(currentPosition, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				beePursuits.get(ship).setPath(path);
 				paths.put(ship, path);
@@ -358,11 +370,11 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				// Generate path using A* algorithm
 				if (A_STAR) {
-					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getAStarPath(positionToNodeIndex(currentPosition, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				// Generate path using other algorithm (hill climbing)
 				else {
-					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getHillClimbingPath(positionToNodeIndex(currentPosition, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				beePursuits.get(ship).setPath(path);
 				paths.put(ship, path);
@@ -387,7 +399,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
 			ArrayList<BeeNode> path;
 
-			targets.remove(ship);
+			//targets.remove(ship);
 			
 			AbstractObject closestEnergy = pickNearestUnreservedEnergy(space, ship);
 
@@ -402,11 +414,11 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				// Generate path using A* algorithm
 				if (A_STAR) {
-					path = graph.getAStarPath(positionToNodeIndex(currentPos), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getAStarPath(positionToNodeIndex(currentPos, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				// Generate path using other algorithm (hill climbing)
 				else {
-					path = graph.getHillClimbingPath(positionToNodeIndex(currentPos), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getHillClimbingPath(positionToNodeIndex(currentPos, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				beePursuits.get(ship).setPath(path);
 				paths.put(ship, path);
@@ -435,11 +447,11 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				// Generate path using A* algorithm
 				if (A_STAR) {
-					path = graph.getAStarPath(positionToNodeIndex(currentPos), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getAStarPath(positionToNodeIndex(currentPos, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				// Generate path using other algorithm (hill climbing)
 				else {
-					path = graph.getHillClimbingPath(positionToNodeIndex(currentPos), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getHillClimbingPath(positionToNodeIndex(currentPos, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				beePursuits.get(ship).setPath(path);
 				paths.put(ship, path);
@@ -481,11 +493,11 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				// Generate path using A* algorithm
 				if (A_STAR) {
-					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getAStarPath(positionToNodeIndex(currentPosition, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				// Generate path using other algorithm (hill climbing)
 				else {
-					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+					path = graphs.get(ship).getHillClimbingPath(positionToNodeIndex(currentPosition, graphs.get(ship)), positionToNodeIndex(targetPos, graphs.get(ship)));
 				}
 				beePursuits.get(ship).setPath(path);
 				paths.put(ship, path);
@@ -571,20 +583,26 @@ public class BeehaviorTeamClient extends TeamClient {
 	@Override
 	public Set<SpacewarGraphics> getGraphics() {
 		HashSet<SpacewarGraphics> graphics = new HashSet<SpacewarGraphics>();
+		
 		if (DEBUG_PATH) {
 			// Draw grid on screen
 			graphics.addAll(gridGraphics);
-			// Draw red circles representing each obstructed node
-			for (int i = 0; i < graph.getSize(); i++) {
-				if (graph.getNode(i).getObstructed()) {
-					graphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graph.getNode(i).getPosition()));
+			//System.out.println(clickedShip);
+			if (graphs.containsKey(clickedShip)) {
+				// Draw red circles representing each obstructed node
+				for (int i = 0; i < graphs.get(clickedShip).getSize(); i++) {
+					if (graphs.get(clickedShip).getNode(i).getObstructed()) {
+						graphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.RED, graphs.get(clickedShip).getNode(i).getPosition()));
+					}
+				}
+				for (BeeNode node : paths.get(clickedShip)) {
+					graphics.add(new CircleGraphics((int)GRID_SIZE / 8, Color.GREEN, node.getPosition()));
 				}
 			}
-			// Add the graphics representing the generated path
-			graphics.addAll(pathGraphics);
 			// Add graphics showing where on the path we are aiming
 			graphics.addAll(bpGraphics);
 		}
+		
 
 		if (DEBUG_PLANNER) {
 			// Draw current tasks
@@ -762,7 +780,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		for (Beacon beacon : beacons) {
 			// Ignore beacons that are targeted by another ship
 			if (!targets.containsValue(beacon)) {
-				dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(beacon.getPosition())));
+				dist = getPathLength(space, graphs.get(ship).getAStarPath(positionToNodeIndex(ship.getPosition(), graphs.get(ship)), positionToNodeIndex(beacon.getPosition(), graphs.get(ship))));
 				if (dist < bestDistance) {
 					bestDistance = dist;
 					closestEnergy = beacon;
@@ -770,7 +788,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		if (targets.get(ship) instanceof Beacon && targets.get(ship).isAlive()) {
-			dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(targets.get(ship).getPosition())));
+			dist = getPathLength(space, graphs.get(ship).getAStarPath(positionToNodeIndex(ship.getPosition(), graphs.get(ship)), positionToNodeIndex(targets.get(ship).getPosition(), graphs.get(ship))));
 			if (dist < bestDistance) {
 				bestDistance = dist;
 				closestEnergy = targets.get(ship);
@@ -781,7 +799,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				if (base.getEnergy() > 2000) {
 					// Ignore bases that are being targeted by another ship
 					if (!targets.containsValue(base)) {
-						dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(base.getPosition())));
+						dist = getPathLength(space, graphs.get(ship).getAStarPath(positionToNodeIndex(ship.getPosition(), graphs.get(ship)), positionToNodeIndex(base.getPosition(), graphs.get(ship))));
 						if (dist < bestDistance) {
 							bestDistance = dist;
 							closestEnergy = base;
@@ -791,7 +809,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		if (targets.get(ship) instanceof Base && ((Base)targets.get(ship)).getEnergy() > 2000 && targets.get(ship).isAlive()) {
-			dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(targets.get(ship).getPosition())));
+			dist = getPathLength(space, graphs.get(ship).getAStarPath(positionToNodeIndex(ship.getPosition(), graphs.get(ship)), positionToNodeIndex(targets.get(ship).getPosition(), graphs.get(ship))));
 			if (dist < bestDistance) {
 				bestDistance = dist;
 				closestEnergy = targets.get(ship);
@@ -813,7 +831,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		for (Base base : bases) {
 			// Check if the base belongs to our team
 			if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
-				double dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(base.getPosition())));
+				double dist = getPathLength(space, graphs.get(ship).getAStarPath(positionToNodeIndex(ship.getPosition(), graphs.get(ship)), positionToNodeIndex(base.getPosition(), graphs.get(ship))));
 				if (dist < bestDistance) {
 					bestDistance = dist;
 					closestBase = base;
@@ -916,7 +934,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	}
 
 	// Converts a position to the index of the grid square that contains that position
-	private int positionToNodeIndex(Position position) {
+	private int positionToNodeIndex(Position position, BeeGraph graph) {
 		int x = (int)(position.getX() / GRID_SIZE);
 		int y = (int)(position.getY() / GRID_SIZE);
 		return x + y * graph.getWidth();
@@ -929,16 +947,16 @@ public class BeehaviorTeamClient extends TeamClient {
 	 *
 	 * Obstacles currently include: non-mineable asteroids, bases, enemy ships, weapon projectiles
 	 */
-	public void findObstructions(int radius, Toroidal2DPhysics space, String teamName, int startIndex, int stopIndex) {
+	public void findObstructions(int radius, Toroidal2DPhysics space, Ship ship, int startIndex, int stopIndex) {
 		// Check the selected nodes for obstructions
 		for (int nodeIndex = startIndex; nodeIndex <= stopIndex; nodeIndex++) {
 			boolean obstructionFound = false;
 			for (Asteroid asteroid : space.getAsteroids()) {
 				// Check for non-mineable asteroids
 				if (!asteroid.isMineable()) {
-					if (space.findShortestDistanceVector(asteroid.getPosition(), graph.getNode(nodeIndex).getPosition())
+					if (space.findShortestDistanceVector(asteroid.getPosition(), graphs.get(ship).getNode(nodeIndex).getPosition())
 							.getMagnitude() <= (2 * radius + asteroid.getRadius())) {
-						graph.obstructNode(nodeIndex);
+						graphs.get(ship).obstructNode(nodeIndex);
 						obstructionFound = true;
 						break;
 					}
@@ -947,9 +965,9 @@ public class BeehaviorTeamClient extends TeamClient {
 						// Note: this may not completely work if the asteroid is moving very fast
 						Position futurePos = new Position(asteroid.getPosition().getX() + asteroid.getPosition().getxVelocity(),
 								asteroid.getPosition().getY() + asteroid.getPosition().getyVelocity());
-						if (space.findShortestDistanceVector(futurePos, graph.getNode(nodeIndex).getPosition())
+						if (space.findShortestDistanceVector(futurePos, graphs.get(ship).getNode(nodeIndex).getPosition())
 								.getMagnitude() <= (2 * radius + asteroid.getRadius())) {
-							graph.obstructNode(nodeIndex);
+							graphs.get(ship).obstructNode(nodeIndex);
 							obstructionFound = true;
 							break;
 						}
@@ -960,25 +978,25 @@ public class BeehaviorTeamClient extends TeamClient {
 				// Check for bases
 				for (Base base : space.getBases()) {
 					// Don't obstruct around the base our ship is heading to
-					if (!targets.containsValue(base)) {
-						if (space.findShortestDistanceVector(base.getPosition(), graph.getNode(nodeIndex).getPosition())
+					if (targets.containsKey(ship) && targets.get(ship).getId() != base.getId()) {
+						if (space.findShortestDistanceVector(base.getPosition(), graphs.get(ship).getNode(nodeIndex).getPosition())
 								.getMagnitude() <= (radius + (2 * base.getRadius()))) {
-							graph.obstructNode(nodeIndex);
+							graphs.get(ship).obstructNode(nodeIndex);
 							obstructionFound = true;
 							break;
 						}
 					}
 				}
 			}
-			if (!obstructionFound && (teamName != null)) {
+			if (!obstructionFound) {
 				// Check for living enemy ships
-				for (Ship ship : space.getShips()) {
-					if (!ship.getTeamName().equals(teamName) && ship.isAlive()) {
+				for (Ship otherShip : space.getShips()) {
+					if (otherShip.getId() != ship.getId() && otherShip.isAlive()) {
 						// If the enemy ship isn't being chased by our ship
-						if (!targets.containsValue(ship)) {
-							if (space.findShortestDistanceVector(ship.getPosition(), graph.getNode(nodeIndex).getPosition())
-									.getMagnitude() <= (radius + (2 * ship.getRadius()))) {
-								graph.obstructNode(nodeIndex);
+						if (targets.containsKey(ship) && targets.get(ship).getId() != otherShip.getId()) {
+							if (space.findShortestDistanceVector(otherShip.getPosition(), graphs.get(ship).getNode(nodeIndex).getPosition())
+									.getMagnitude() <= (radius + (2 * otherShip.getRadius()))) {
+								graphs.get(ship).obstructNode(nodeIndex);
 								obstructionFound = true;
 								break;
 							}
@@ -990,10 +1008,10 @@ public class BeehaviorTeamClient extends TeamClient {
 			if (!obstructionFound) {
 				for (AbstractWeapon weapon : space.getWeapons()) {
 					// Don't obstruct nodes based on our own bullets because otherwise ships get confused when they shoot in front of themselves
-					if (!weapon.getFiringShip().getTeamName().equalsIgnoreCase(teamName)) {
-						if (space.findShortestDistanceVector(weapon.getPosition(), graph.getNode(nodeIndex).getPosition())
+					if (!weapon.getFiringShip().getTeamName().equalsIgnoreCase(ship.getTeamName())) {
+						if (space.findShortestDistanceVector(weapon.getPosition(), graphs.get(ship).getNode(nodeIndex).getPosition())
 								.getMagnitude() <= (radius + (2 * weapon.getRadius()))) {
-							graph.obstructNode(nodeIndex);
+							graphs.get(ship).obstructNode(nodeIndex);
 							obstructionFound = true;
 							break;
 						}
@@ -1002,7 +1020,45 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 			// No obstructions were found for the current node
 			if (!obstructionFound) {
-				graph.unobstructNode(nodeIndex);
+				graphs.get(ship).unobstructNode(nodeIndex);
+			}
+		}
+	}
+
+
+	@Override
+	public MouseAdapter getMouseAdapter(AffineTransform mouseTransform) {
+		System.out.println("getMouseAdapter called in team client");
+		mouseListener.setTransform(mouseTransform);
+		return mouseListener;
+	}
+	
+	class BeeMouseListener extends MouseAdapter {
+		Toroidal2DPhysics space;
+		AffineTransform mouseTransform;
+		
+		BeeMouseListener(Toroidal2DPhysics space) {
+			this.space = space;
+		}
+		
+		public void setTransform(AffineTransform mouseTransform) {
+			this.mouseTransform = mouseTransform;
+		}
+		
+		@Override
+		public void mouseReleased(MouseEvent e) {
+			Point point = e.getPoint();
+			Point2D newPoint = new Point2D.Double(0, 0);
+			mouseTransform.transform(point, newPoint); 
+			Position clickPosition = new Position(newPoint.getX(), newPoint.getY());
+			if (e.getButton() == MouseEvent.BUTTON1) {
+				for (Ship ship : globalSpace.getShips()) {
+					if (space.findShortestDistance(clickPosition, ship.getPosition()) <= ship.getRadius()) {
+						clickedShip = ship;
+						return;
+					}
+				}
+				
 			}
 		}
 	}
