@@ -58,7 +58,6 @@ public class BeeGraph {
 			for (BeeNode adjNode: node.getAdjacencyMap().keySet()) {
 				// Multiply edge distance by fixed amount so we can recover it later without recalculating cost
 				adjNode.setEdgeCost(node, adjNode.getEdgeCost(node) * MULT);
-				node.setEdgeCost(adjNode, node.getEdgeCost(adjNode) * MULT);
 			}
 			return true;
 		}
@@ -74,7 +73,6 @@ public class BeeGraph {
 			// Change edge distance back to normal
 			for (BeeNode adjNode: node.getAdjacencyMap().keySet()) {
 				adjNode.setEdgeCost(node, adjNode.getEdgeCost(node) / MULT);
-				node.setEdgeCost(adjNode, node.getEdgeCost(adjNode) / MULT);
 			}
 			return true;
 		}
