@@ -28,12 +28,13 @@ public class BeehaviorTeamClient extends TeamClient {
 	// The ship's path updates every this many timesteps
 	static final int PATH_UPDATE_INTERVAL = 10;
 	// Whether or not to draw graphics for debugging
-	static final boolean DEBUG_PATH = false;
+	static final boolean DEBUG_PATH = true;
 	static final boolean DEBUG_PLANNER = true;
 
+	// Values learned from project 2
 	static final double TRANSLATIONAL_KP = 19.0;
 	static final double ROTATIONAL_KP = 28.0;
-	static final double LOW_ENERGY_THRESH = 2000;
+	static final double LOW_ENERGY_THRESH = 2000; // TODO: should this be defined here or in BeePlanner?
 	static final double SHOOT_ENEMY_DIST = 500;
 	
 	// Graph to store nodes that represent the environment
@@ -105,7 +106,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
 		targetShips = new HashMap<Ship, Ship>();
-		planner = new BeePlanner();
+		planner = new BeePlanner(LOW_ENERGY_THRESH);
 		plannerGraphics = new HashSet<>();
 	}
 
@@ -190,8 +191,8 @@ public class BeehaviorTeamClient extends TeamClient {
 				case FIND_ENEMY_FLAG:
 					actions.put(ship.getId(), findEnemyFlagAction(space, ship));
 					break;
-				case RETURN_ENEMY_FLAG:
-					actions.put(ship.getId(), returnEnemyFlagAction(space, ship));
+				case RETURN_TO_BASE:
+					actions.put(ship.getId(), returnToBaseAction(space, ship));
 					break;
 				case FIND_ALLY_FLAG:
 					actions.put(ship.getId(), findAllyFlagAction(space, ship));
@@ -202,6 +203,11 @@ public class BeehaviorTeamClient extends TeamClient {
 				case PROTECT:
 					actions.put(ship.getId(), protectAction(space, ship));
 					break;
+				case GET_ENERGY:
+					actions.put(ship.getId(), getEnergyAction(space, ship));
+					break;
+				case GET_RESOURCES:
+					actions.put(ship.getId(), getResourcesAction(space,ship));
 				case WANDER:
 					actions.put(ship.getId(), wanderAction(space, ship));
 					break;
@@ -271,7 +277,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 
-	private AbstractAction returnEnemyFlagAction(Toroidal2DPhysics space, Ship ship) {
+	private AbstractAction returnToBaseAction(Toroidal2DPhysics space, Ship ship) {
 		Position currentPosition = ship.getPosition();
 		// Find new path every so many timesteps
 		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
@@ -390,6 +396,83 @@ public class BeehaviorTeamClient extends TeamClient {
 	private AbstractAction protectAction(Toroidal2DPhysics space, Ship ship) {
 		return guardAction(space, ship); // TODO: Make actual protect action
 	}
+	
+	private AbstractAction getEnergyAction(Toroidal2DPhysics space, Ship ship) {
+		// Find new path every so many timesteps
+		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
+			ArrayList<BeeNode> path;
+
+			targets.remove(ship);
+			
+			AbstractObject closestEnergy = pickNearestUnreservedEnergy(space, ship);
+
+			if (closestEnergy == null) {
+				// No beacons or bases with enough energy available
+				return new DoNothingAction();
+			}
+			else {
+				targets.put(ship, closestEnergy);
+				Position currentPos = ship.getPosition();
+				Position targetPos = closestEnergy.getPosition();
+
+				// Generate path using A* algorithm
+				if (A_STAR) {
+					path = graph.getAStarPath(positionToNodeIndex(currentPos), positionToNodeIndex(targetPos));
+				}
+				// Generate path using other algorithm (hill climbing)
+				else {
+					path = graph.getHillClimbingPath(positionToNodeIndex(currentPos), positionToNodeIndex(targetPos));
+				}
+				beePursuits.get(ship).setPath(path);
+				paths.put(ship, path);
+			}
+		}
+		
+		// Finish task when ship has enough energy
+		if (ship.getEnergy() > LOW_ENERGY_THRESH) {
+			planner.finishTask(ship);
+		}
+		
+		return getMoveFromBeePursuit(space, ship);
+	}
+	
+	private AbstractAction getResourcesAction(Toroidal2DPhysics space, Ship ship) {
+		// Find new path every so many timesteps
+		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
+			ArrayList<BeeNode> path;
+
+			Asteroid closestResources = pickNearestMineableAsteroid(space, ship);
+
+			if (closestResources == null) {
+				// No beacons or bases with enough energy available
+				return new DoNothingAction();
+			}
+			else {
+				targets.put(ship, closestResources);
+				Position currentPos = ship.getPosition();
+				Position targetPos = closestResources.getPosition();
+
+				// Generate path using A* algorithm
+				if (A_STAR) {
+					path = graph.getAStarPath(positionToNodeIndex(currentPos), positionToNodeIndex(targetPos));
+				}
+				// Generate path using other algorithm (hill climbing)
+				else {
+					path = graph.getHillClimbingPath(positionToNodeIndex(currentPos), positionToNodeIndex(targetPos));
+				}
+				beePursuits.get(ship).setPath(path);
+				paths.put(ship, path);
+			}
+		}
+		
+		// Finish task when ship has picked up "enough" resources or is low on energy
+		// TODO: replace Integer.MAX_VALUE with a finite number
+		if (ship.getResources().getTotal() > Integer.MAX_VALUE || ship.getEnergy() < LOW_ENERGY_THRESH) {
+			planner.finishTask(ship);
+		}
+		
+		return getMoveFromBeePursuit(space, ship);
+	}
 
 	private AbstractAction wanderAction(Toroidal2DPhysics space, Ship ship) {
 		Position currentPosition = ship.getPosition();
@@ -461,8 +544,8 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics.add(new TargetGraphics(16, Color.PINK, goalPos));
 
 		targetShips.put(ship, null);
-		// If we are low on energy or chasing a core, don't find an enemy ship to target
-		if ((ship.getEnergy() > LOW_ENERGY_THRESH) && !(targets.get(ship) instanceof AiCore)) {
+		// If the ship is allowed to shoot, find an enemy ship to target
+		if (planner.shipCanShoot(ship)) {
 			// Find the closest enemy ship within a certain (learned) distance
 			double shipDistance = SHOOT_ENEMY_DIST;
 			for (Ship otherShip : space.getShips()) {
@@ -600,7 +683,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				if (actionableObject instanceof Ship) {
 					Ship ship = (Ship) actionableObject;
 					if (targetShips.get(ship) != null) {
-						Position shipPos = actionableObject.getPosition();
+						Position shipPos = ship.getPosition();
 						Position targetShipPos = targetShips.get(ship).getPosition();
 						// Calculate the difference between the ship's current orientation and the orientation it needs to face the targeted ship
 						double angleDiff = actionableObject.getPosition().getOrientation() - new Vector2D(new Position(targetShipPos.getX() - shipPos.getX(),  
@@ -626,7 +709,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		AbstractObject targetObj = null;
 		// We are low on energy -> go get energy
 		if (ship.getEnergy() < LOW_ENERGY_THRESH) {
-			AbstractObject energy = pickNearestEnergy(space, ship);
+			AbstractObject energy = pickNearestUnreservedEnergy(space, ship);
 			if (energy != null) {
 				return energy;
 			}
@@ -672,35 +755,94 @@ public class BeehaviorTeamClient extends TeamClient {
 		return targetObj;
 	}
 	
-	/*
-	 * Find the nearest beacon or base with 2000 or more energy
+	/**
+	 * Find the nearest beacon or base with 2000 or more energy and is not being targeted by another ship
 	 */
-	private AbstractObject pickNearestEnergy(Toroidal2DPhysics space, Ship ship) {
+	private AbstractObject pickNearestUnreservedEnergy(Toroidal2DPhysics space, Ship ship) {
 		// get the current beacons
 		Set<Beacon> beacons = space.getBeacons();
 
 		AbstractObject closestEnergy = null;
 		double bestDistance = Double.POSITIVE_INFINITY;
-
-		for (Beacon beacon : beacons) {
-			double dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
-			if (dist < bestDistance) {
-				bestDistance = dist;
-				closestEnergy = beacon;
-			}
-		}
-		
-		for (Base base : space.getBases()) {
-			if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
-				if (base.getEnergy() >= 2000) {
-					double dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
+		/*
+		// If the ship is not already targeting a beacon
+		if (!(targets.get(ship) instanceof Beacon) || !targets.get(ship).isAlive()) {
+			for (Beacon beacon : beacons) {
+				// Ignore beacons that are targeted by another ship
+				if (!targets.containsValue(beacon)) {
+					double dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
 					if (dist < bestDistance) {
 						bestDistance = dist;
-						closestEnergy = base;
+						closestEnergy = beacon;
 					}
 				}
 			}
 		}
+		else {
+			return targets.get(ship);
+		}
+		
+		// If the ship is not already targeting a base
+		if (!(targets.get(ship) instanceof Base) || !targets.get(ship).isAlive()) {
+			for (Base base : space.getBases()) {
+				if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
+					if (base.getEnergy() >= 2000) {
+						// Ignore bases that are being targeted by another ship
+						if (!targets.containsValue(base)) {
+							double dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
+							if (dist < bestDistance) {
+								bestDistance = dist;
+								closestEnergy = base;
+							}
+						}
+					}
+				}
+			}
+		}
+		else {
+			return targets.get(ship);
+		}
+		*/
+		double dist;
+		for (Beacon beacon : beacons) {
+			// Ignore beacons that are targeted by another ship
+			if (!targets.containsValue(beacon)) {
+				dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
+				if (dist < bestDistance) {
+					bestDistance = dist;
+					closestEnergy = beacon;
+				}
+			}
+		}
+		if (targets.get(ship) instanceof Beacon && targets.get(ship).isAlive()) {
+			dist = space.findShortestDistance(ship.getPosition(), targets.get(ship).getPosition());
+			if (dist < bestDistance) {
+				bestDistance = dist;
+				closestEnergy = targets.get(ship);
+			}
+		}
+		for (Base base : space.getBases()) {
+			if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
+				if (base.getEnergy() > 2000) {
+					// Ignore bases that are being targeted by another ship
+					if (!targets.containsValue(base)) {
+						dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
+						if (dist < bestDistance) {
+							bestDistance = dist;
+							closestEnergy = base;
+						}
+					}
+				}
+			}
+		}
+		if (targets.get(ship) instanceof Base && ((Base)targets.get(ship)).getEnergy() > 2000 && targets.get(ship).isAlive()) {
+			dist = space.findShortestDistance(ship.getPosition(), targets.get(ship).getPosition());
+			if (dist < bestDistance) {
+				bestDistance = dist;
+				closestEnergy = targets.get(ship);
+			}
+		}
+		
 		return closestEnergy;
 	}
 	
@@ -771,6 +913,21 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		return closestEnemy;
+	}
+	
+	private Asteroid pickNearestMineableAsteroid(Toroidal2DPhysics space, Ship ship) {
+		Asteroid closestMineableAsteroid = null;
+		double bestDistance = Double.POSITIVE_INFINITY;
+		for (Asteroid asteroid : space.getAsteroids()) {
+			if (asteroid.isMineable()) {
+				double dist = space.findShortestDistance(ship.getPosition(), asteroid.getPosition());
+				if (dist < bestDistance) {
+					bestDistance = dist;
+					closestMineableAsteroid = asteroid;
+				}
+			}
+		}
+		return closestMineableAsteroid;
 	}
 	
 	/*

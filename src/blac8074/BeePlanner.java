@@ -22,9 +22,11 @@ public class BeePlanner {
     boolean isCarryingEnemyFlag = false;
     boolean isFindingEnemyFlag = false;
     boolean isGuarding = false;
+    double lowEnergyThresh;
 
-    public BeePlanner() {
+    public BeePlanner(double lowEnergyThresh) {
         assignedTasks = new HashMap<>();
+        this.lowEnergyThresh = lowEnergyThresh;
     }
 
     public void assignTask(Ship ship) {
@@ -35,6 +37,9 @@ public class BeePlanner {
         	assignedTask = BeeTask.RETURN_TO_BASE;
         	isFindingEnemyFlag = false;
         	isCarryingEnemyFlag = true;
+        }
+        else if (ship.getEnergy() < lowEnergyThresh) {
+        	assignedTask = BeeTask.GET_ENERGY;
         }
         else if (!isGuarding) {
             // No one is guarding, we should guard!
