@@ -264,9 +264,6 @@ public class BeehaviorTeamClient extends TeamClient {
 				beePursuits.get(ship).setPath(path);
 				paths.put(ship, path);
 			}
-			else {
-				return new DoNothingAction();
-			}
 		}
 
 		if (ship.isCarryingFlag() || planner.isCarryingEnemyFlag == true) {
@@ -294,16 +291,7 @@ public class BeehaviorTeamClient extends TeamClient {
 
 			target = closestBase;
 
-			// Looks like the flag is automatically deposited when the ship bumps the base
-			/*
 			if (space.findShortestDistance(closestBase.getPosition(), ship.getPosition()) < 50) { // TODO: what is the actual range for this
-				ship.getFlag().depositFlag();
-				planner.finishTask(ship);
-			}
-			*/
-			// Finish task when ship is no longer carrying flag (returned it to base or died and dropped it)
-			if (!ship.isCarryingFlag()) {
-				planner.setCarryingEnemyFlag(false);
 				planner.finishTask(ship);
 			}
 
@@ -322,9 +310,6 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 				beePursuits.get(ship).setPath(path);
 				paths.put(ship, path);
-			}
-			else {
-				return new DoNothingAction();
 			}
 		}
 
@@ -443,11 +428,7 @@ public class BeehaviorTeamClient extends TeamClient {
 
 			Asteroid closestResources = pickNearestMineableAsteroid(space, ship);
 
-			if (closestResources == null) {
-				// No beacons or bases with enough energy available
-				return new DoNothingAction();
-			}
-			else {
+			if (closestResources != null) {
 				targets.put(ship, closestResources);
 				Position currentPos = ship.getPosition();
 				Position targetPos = closestResources.getPosition();
@@ -549,8 +530,8 @@ public class BeehaviorTeamClient extends TeamClient {
 			// Find the closest enemy ship within a certain (learned) distance
 			double shipDistance = SHOOT_ENEMY_DIST;
 			for (Ship otherShip : space.getShips()) {
-				// If the other ship is an enemy ship
-				if (!otherShip.getTeamName().equals(ship.getTeamName())) {
+				// If the other ship is an enemy ship and is alive
+				if (!otherShip.getTeamName().equals(ship.getTeamName()) && otherShip.isAlive()) {
 					// Get distance without toroidal wrap because toroidal shooting is hard
 					double distance = new Vector2D(currentPosition).subtract(new Vector2D(otherShip.getPosition())).getMagnitude();
 					if (distance < shipDistance) {
@@ -621,6 +602,18 @@ public class BeehaviorTeamClient extends TeamClient {
 
 		HashMap<UUID, PurchaseTypes> purchases = new HashMap<UUID, PurchaseTypes>();
 		double BASE_BUYING_DISTANCE = 400;
+		
+		// Buy a new ship if we can afford it
+		if (purchaseCosts.canAfford(PurchaseTypes.SHIP, resourcesAvailable)) {
+			for (AbstractActionableObject actionableObject : actionableObjects) {
+				if (actionableObject instanceof Base) {
+					Base base = (Base) actionableObject;
+					purchases.put(base.getId(), PurchaseTypes.SHIP);
+					break;
+				}
+			}
+		}
+
 
 		// Buy a double max energy powerup if we can afford it
 		if (purchaseCosts.canAfford(PurchaseTypes.POWERUP_DOUBLE_MAX_ENERGY, resourcesAvailable)) {
@@ -678,6 +671,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		
 		// Potentially fire every 3 timesteps
+		// TODO: is there some way to avoid firing when the target is behind an obstacle? like if there is an asteroid or friendly ship/base in the way
 		if ((space.getCurrentTimestep() % 3) == 0) {
 			for (AbstractActionableObject actionableObject : actionableObjects){
 				if (actionableObject instanceof Ship) {
@@ -764,50 +758,11 @@ public class BeehaviorTeamClient extends TeamClient {
 
 		AbstractObject closestEnergy = null;
 		double bestDistance = Double.POSITIVE_INFINITY;
-		/*
-		// If the ship is not already targeting a beacon
-		if (!(targets.get(ship) instanceof Beacon) || !targets.get(ship).isAlive()) {
-			for (Beacon beacon : beacons) {
-				// Ignore beacons that are targeted by another ship
-				if (!targets.containsValue(beacon)) {
-					double dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
-					if (dist < bestDistance) {
-						bestDistance = dist;
-						closestEnergy = beacon;
-					}
-				}
-			}
-		}
-		else {
-			return targets.get(ship);
-		}
-		
-		// If the ship is not already targeting a base
-		if (!(targets.get(ship) instanceof Base) || !targets.get(ship).isAlive()) {
-			for (Base base : space.getBases()) {
-				if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
-					if (base.getEnergy() >= 2000) {
-						// Ignore bases that are being targeted by another ship
-						if (!targets.containsValue(base)) {
-							double dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
-							if (dist < bestDistance) {
-								bestDistance = dist;
-								closestEnergy = base;
-							}
-						}
-					}
-				}
-			}
-		}
-		else {
-			return targets.get(ship);
-		}
-		*/
 		double dist;
 		for (Beacon beacon : beacons) {
 			// Ignore beacons that are targeted by another ship
 			if (!targets.containsValue(beacon)) {
-				dist = space.findShortestDistance(ship.getPosition(), beacon.getPosition());
+				dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(beacon.getPosition())));
 				if (dist < bestDistance) {
 					bestDistance = dist;
 					closestEnergy = beacon;
@@ -815,7 +770,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		if (targets.get(ship) instanceof Beacon && targets.get(ship).isAlive()) {
-			dist = space.findShortestDistance(ship.getPosition(), targets.get(ship).getPosition());
+			dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(targets.get(ship).getPosition())));
 			if (dist < bestDistance) {
 				bestDistance = dist;
 				closestEnergy = targets.get(ship);
@@ -826,7 +781,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				if (base.getEnergy() > 2000) {
 					// Ignore bases that are being targeted by another ship
 					if (!targets.containsValue(base)) {
-						dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
+						dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(base.getPosition())));
 						if (dist < bestDistance) {
 							bestDistance = dist;
 							closestEnergy = base;
@@ -836,7 +791,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 		if (targets.get(ship) instanceof Base && ((Base)targets.get(ship)).getEnergy() > 2000 && targets.get(ship).isAlive()) {
-			dist = space.findShortestDistance(ship.getPosition(), targets.get(ship).getPosition());
+			dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(targets.get(ship).getPosition())));
 			if (dist < bestDistance) {
 				bestDistance = dist;
 				closestEnergy = targets.get(ship);
@@ -854,11 +809,11 @@ public class BeehaviorTeamClient extends TeamClient {
 
 		Base closestBase = null;
 		double bestDistance = Double.POSITIVE_INFINITY;
-
+		
 		for (Base base : bases) {
 			// Check if the base belongs to our team
 			if (base.getTeamName().equalsIgnoreCase(ship.getTeamName())) {
-				double dist = space.findShortestDistance(ship.getPosition(), base.getPosition());
+				double dist = getPathLength(space, graph.getAStarPath(positionToNodeIndex(ship.getPosition()), positionToNodeIndex(base.getPosition())));
 				if (dist < bestDistance) {
 					bestDistance = dist;
 					closestBase = base;
@@ -951,6 +906,14 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		return grid;
 	}
+	
+	private double getPathLength(Toroidal2DPhysics space, ArrayList<BeeNode> path) {
+		double length = 0;
+		for (int i = 0; i < path.size() - 1; i++) {
+			length += space.findShortestDistance(path.get(i).getPosition(), path.get(i + 1).getPosition());
+		}
+		return length;
+	}
 
 	// Converts a position to the index of the grid square that contains that position
 	private int positionToNodeIndex(Position position) {
@@ -959,7 +922,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		return x + y * graph.getWidth();
 	}
 
-	/*
+	/**
 	 * Check each grid square to see if it contains an obstacle or is near enough to an obstacle
 	 * If it is, obstruct the corresponding node
 	 * If not, unobstruct the corresponding node
