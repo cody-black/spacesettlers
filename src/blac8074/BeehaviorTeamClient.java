@@ -27,8 +27,8 @@ public class BeehaviorTeamClient extends TeamClient {
 	static final boolean A_STAR = true;
 	// The ship's path updates every this many timesteps
 	static final int PATH_UPDATE_INTERVAL = 10;
-	// Whether or not to draw graphics for debugging pathfinding
-	static final boolean DEBUG_GRAPHICS = false;
+	// Whether or not to draw graphics for debugging
+	static final boolean DEBUG_PATH = false;
 	static final boolean DEBUG_PLANNER = true;
 
 	static final double TRANSLATIONAL_KP = 19.0;
@@ -127,7 +127,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 
 		// Update obstructions frequently to make the debug graphics more responsive
-		if (DEBUG_GRAPHICS) {
+		if (DEBUG_PATH) {
 			bpGraphics.clear();
 			pathGraphics.clear();
 			// Update obstructions of first half of graph on even timesteps
@@ -217,7 +217,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		
 		// Create new path graphics
-		if (DEBUG_GRAPHICS) {
+		if (DEBUG_PATH) {
 			// Add green circles representing nodes on the path
 			for (ArrayList<BeeNode> path : paths.values()) {
 				for (BeeNode node : path) {
@@ -507,7 +507,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	@Override
 	public Set<SpacewarGraphics> getGraphics() {
 		HashSet<SpacewarGraphics> graphics = new HashSet<SpacewarGraphics>();
-		if (DEBUG_GRAPHICS) {
+		if (DEBUG_PATH) {
 			// Draw grid on screen
 			graphics.addAll(gridGraphics);
 			// Draw red circles representing each obstructed node
@@ -817,7 +817,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				// Check for non-mineable asteroids
 				if (!asteroid.isMineable()) {
 					if (space.findShortestDistanceVector(asteroid.getPosition(), graph.getNode(nodeIndex).getPosition())
-							.getMagnitude() <= (radius + (2 * asteroid.getRadius()))) {
+							.getMagnitude() <= (2 * radius + asteroid.getRadius())) {
 						graph.obstructNode(nodeIndex);
 						obstructionFound = true;
 						break;
@@ -828,7 +828,7 @@ public class BeehaviorTeamClient extends TeamClient {
 						Position futurePos = new Position(asteroid.getPosition().getX() + asteroid.getPosition().getxVelocity(),
 								asteroid.getPosition().getY() + asteroid.getPosition().getyVelocity());
 						if (space.findShortestDistanceVector(futurePos, graph.getNode(nodeIndex).getPosition())
-								.getMagnitude() <= (radius + (2 * asteroid.getRadius()))) {
+								.getMagnitude() <= (2 * radius + asteroid.getRadius())) {
 							graph.obstructNode(nodeIndex);
 							obstructionFound = true;
 							break;
