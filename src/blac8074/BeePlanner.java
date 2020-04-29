@@ -18,14 +18,17 @@ public class BeePlanner {
     }
 
     Map<Ship, BeeTask> assignedTasks;
+    Map<Ship, Boolean> isFinished;
 
     boolean isCarryingEnemyFlag = false;
     boolean isFindingEnemyFlag = false;
     boolean isGuarding = false;
+    boolean isGettingResources = false;
     double lowEnergyThresh;
 
     public BeePlanner(double lowEnergyThresh) {
         assignedTasks = new HashMap<>();
+        isFinished = new HashMap<>();
         this.lowEnergyThresh = lowEnergyThresh;
     }
 
@@ -38,22 +41,29 @@ public class BeePlanner {
         	isFindingEnemyFlag = false;
         	isCarryingEnemyFlag = true;
         }
+        else if (assignedTasks.containsKey(ship) && assignedTasks.get(ship) == BeeTask.GET_RESOURCES && ship.getResources().getTotal() > 0) {
+        	assignedTask = BeeTask.RETURN_TO_BASE;
+        }
         else if (ship.getEnergy() < lowEnergyThresh) {
         	assignedTask = BeeTask.GET_ENERGY;
         }
         else if (!isGuarding) {
             // No one is guarding, we should guard!
             assignedTask = BeeTask.GUARD;
-        } else if (!isCarryingEnemyFlag && !isFindingEnemyFlag) {
+        } else if (!isCarryingEnemyFlag && !isFindingEnemyFlag && ship.getEnergy() > lowEnergyThresh) {
             // No one has the flag and we aren't looking for it, let's go get it
             assignedTask = BeeTask.FIND_ENEMY_FLAG;
-        }	
+        }
+        else if (!isGettingResources) {
+        	assignedTask = BeeTask.GET_RESOURCES;
+        }
         else if (isCarryingEnemyFlag) {
             // We have the flag and it's not this ship, go help him out!
             assignedTask = BeeTask.PROTECT;
         }
 
         assignedTasks.put(ship, assignedTask);
+        isFinished.put(ship, false);
 
         switch (assignedTask) {
             case FIND_ENEMY_FLAG:
@@ -71,6 +81,7 @@ public class BeePlanner {
             case GET_ENERGY:
             	break;
             case GET_RESOURCES:
+            	isGettingResources = true;
             	break;
             case WANDER:
                 break;
@@ -78,9 +89,10 @@ public class BeePlanner {
     }
 
     public void finishTask(Ship ship) {
-        BeeTask removedTask = assignedTasks.remove(ship);
+        BeeTask finishedTask = assignedTasks.get(ship);
+        isFinished.put(ship, true);
 
-        switch (removedTask) {
+        switch (finishedTask) {
             case FIND_ENEMY_FLAG:
                 isFindingEnemyFlag = false;
                 break;
@@ -96,6 +108,7 @@ public class BeePlanner {
             case GET_ENERGY:
             	break;
             case GET_RESOURCES:
+            	isGettingResources = false;
             	break;
             case WANDER:
                 break;
@@ -103,7 +116,7 @@ public class BeePlanner {
     }
 
     public BeeTask getTask(Ship ship) {
-        if (!assignedTasks.containsKey(ship) || ship.isCarryingFlag()) {
+        if (!assignedTasks.containsKey(ship) || isFinished.get(ship) || ship.isCarryingFlag()) {
             assignTask(ship);
         }
 
@@ -121,6 +134,7 @@ public class BeePlanner {
 		boolean canShoot = getTask(ship) != BeeTask.FIND_ENEMY_FLAG; // Ship is not going for enemy flag
 		canShoot = canShoot && !ship.isCarryingFlag(); // Ship is not carrying enemy flag
 		canShoot = canShoot && getTask(ship) != BeeTask.GET_ENERGY; // Ship is not going to get more energy
+		canShoot = canShoot && getTask(ship) != BeeTask.GET_RESOURCES; // Ship is not gathering resources
 		return canShoot;
 	}
 }
