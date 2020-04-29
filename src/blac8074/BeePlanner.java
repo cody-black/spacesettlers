@@ -8,9 +8,9 @@ import java.util.Map;
 public class BeePlanner {
     public enum BeeTask {
         FIND_ENEMY_FLAG, // Ship should move towards the enemy flag
-        RETURN_TO_BASE, // Ship with flag should head to base
+        RETURN_TO_BASE, // Ship should go to nearest friendly base
         FIND_ALLY_FLAG, // If our flag is gone, Ship should return it (?)
-        GUARD, // Ship should protect our flag
+        GUARD, // Ship should guard our flag
         PROTECT, // Ship should protect flag carrier
         GET_ENERGY, // Ship should travel to closest beacon or base to get more energy
         GET_RESOURCES, // Ship should pick up nearest resource asteroid
@@ -23,6 +23,7 @@ public class BeePlanner {
     boolean isCarryingEnemyFlag = false;
     boolean isFindingEnemyFlag = false;
     boolean isGuarding = false;
+    boolean isProtecting = false;
     boolean isGettingResources = false;
     double lowEnergyThresh;
 
@@ -42,9 +43,11 @@ public class BeePlanner {
         	isCarryingEnemyFlag = true;
         }
         else if (assignedTasks.containsKey(ship) && assignedTasks.get(ship) == BeeTask.GET_RESOURCES && ship.getResources().getTotal() > 0) {
+        	// This ship just finished gathering resources and needs to bring them back to base
         	assignedTask = BeeTask.RETURN_TO_BASE;
         }
         else if (ship.getEnergy() < lowEnergyThresh) {
+        	// This ship is low on energy and needs to get more
         	assignedTask = BeeTask.GET_ENERGY;
         }
         else if (!isGuarding) {
@@ -55,12 +58,12 @@ public class BeePlanner {
             // No one has the flag and we aren't looking for it, let's go get it
             assignedTask = BeeTask.FIND_ENEMY_FLAG;
         }
-        else if (!isGettingResources) {
-        	assignedTask = BeeTask.GET_RESOURCES;
-        }
-        else if (isCarryingEnemyFlag) {
+        else if (isCarryingEnemyFlag && !isProtecting) {
             // We have the flag and it's not this ship, go help him out!
             assignedTask = BeeTask.PROTECT;
+        }
+        else if (!isGettingResources) {
+        	assignedTask = BeeTask.GET_RESOURCES;
         }
 
         assignedTasks.put(ship, assignedTask);
@@ -78,6 +81,7 @@ public class BeePlanner {
                 isGuarding = true;
                 break;
             case PROTECT:
+            	isProtecting = true;
                 break;
             case GET_ENERGY:
             	break;
@@ -105,6 +109,7 @@ public class BeePlanner {
                 isGuarding = false; // Assumes only one guard
                 break;
             case PROTECT:
+            	isProtecting = false;
                 break;
             case GET_ENERGY:
             	break;

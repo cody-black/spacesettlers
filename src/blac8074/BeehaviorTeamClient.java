@@ -341,15 +341,22 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 
-			if (ourFlag == null) {
-				// TODO: This will happen when they have our flag, probably should have ATTACK task
-				// for now, just wander
-				return wanderAction(space, ship);
-			}
-
-			// Target nearest enemy
 			// TODO: Make it not leave a radius of the flag or something like that
-			target = pickNearestEnemyToPosition(space, ship, ourFlag.getPosition());
+			// If our flag is not being carried
+			if (ourFlag.isAlive()) {
+				// Target nearest enemy to our flag
+				target = pickNearestEnemyToPosition(space, ship, ourFlag.getPosition());
+			}
+			// If our flag is being carried
+			else {
+				// Target flag carrier
+				for (Ship otherShip : space.getShips()) {
+					if (!ship.getTeamName().equals(otherShip.getTeamName())) {
+						if (otherShip.isCarryingFlag())
+						target = otherShip;
+					}
+				}
+			}
 
 			// If we have a valid target
 			if (target != null) {
@@ -383,7 +390,51 @@ public class BeehaviorTeamClient extends TeamClient {
 	}
 
 	private AbstractAction protectAction(Toroidal2DPhysics space, Ship ship) {
-		return guardAction(space, ship); // TODO: Make actual protect action
+		Position currentPosition = ship.getPosition();
+		// Find new path every so many timesteps
+		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
+			ArrayList<BeeNode> path;
+
+			AbstractObject target = null;
+
+			for (Ship otherShip : space.getShips()) {
+				if (ship.getTeamName().equals(otherShip.getTeamName())) {
+					if (otherShip.isCarryingFlag()) {
+						// Target enemy nearest to flag carrier
+						target = pickNearestEnemyToPosition(space, ship, otherShip.getPosition());
+					}
+				}
+			}
+			
+			// If we have a valid target
+			if (target != null) {
+				targets.put(ship, target);
+				Position targetPos = target.getPosition();
+
+				if (space.findShortestDistance(ship.getPosition(), target.getPosition()) < (3 * ship.getRadius())) {
+					targetPos = ship.getPosition();
+				}
+
+				// Generate path using A* algorithm
+				if (A_STAR) {
+					path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				// Generate path using other algorithm (hill climbing)
+				else {
+					path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+				}
+				beePursuits.get(ship).setPath(path);
+				paths.put(ship, path);
+			}
+			else {
+				return new DoNothingAction();
+			}
+		}
+
+		// The Guard task is only valid for 1 tick
+		planner.finishTask(ship);
+
+		return getMoveFromBeePursuit(space, ship);
 	}
 	
 	private AbstractAction getEnergyAction(Toroidal2DPhysics space, Ship ship) {
