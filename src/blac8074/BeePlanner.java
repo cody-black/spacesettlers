@@ -50,6 +50,7 @@ public class BeePlanner {
         else if (!isGuarding) {
             // No one is guarding, we should guard!
             assignedTask = BeeTask.GUARD;
+        // TODO: is there some way to pick the closest ship to the enemy flag that has enough energy?
         } else if (!isCarryingEnemyFlag && !isFindingEnemyFlag && ship.getEnergy() > lowEnergyThresh) {
             // No one has the flag and we aren't looking for it, let's go get it
             assignedTask = BeeTask.FIND_ENEMY_FLAG;
@@ -131,10 +132,10 @@ public class BeePlanner {
      * Returns true if the given ship is allowed to shoot, false if it isn't
      */
 	public boolean shipCanShoot(Ship ship) {
-		boolean canShoot = getTask(ship) != BeeTask.FIND_ENEMY_FLAG; // Ship is not going for enemy flag
+		boolean canShoot = assignedTasks.get(ship) != BeeTask.FIND_ENEMY_FLAG; // Ship is not going for enemy flag
 		canShoot = canShoot && !ship.isCarryingFlag(); // Ship is not carrying enemy flag
-		canShoot = canShoot && getTask(ship) != BeeTask.GET_ENERGY; // Ship is not going to get more energy
-		canShoot = canShoot && getTask(ship) != BeeTask.GET_RESOURCES; // Ship is not gathering resources
+		canShoot = canShoot && ship.getEnergy() > lowEnergyThresh; // Ship has enough energy
+		canShoot = canShoot && assignedTasks.get(ship) != BeeTask.GET_RESOURCES; // Ship is not gathering resources
 		return canShoot;
 	}
 }
