@@ -62,6 +62,11 @@ public class ImmutableTeamInfo {
 	int totalKillsReceived;
 	
 	/**
+	 * Total flags collected
+	 */
+	int totalFlagsCollected;
+	
+	/**
 	 * The name that shows up in the ladder
 	 */
 	String ladderName;
@@ -79,6 +84,7 @@ public class ImmutableTeamInfo {
 		this.totalKillsInflicted = team.totalKillsInflicted;
 		this.totalCoresCollected = team.totalCoresCollected;//herr0861 edit
 		this.totalKillsReceived = team.totalKillsReceived;
+		this.totalFlagsCollected = team.totalFlagsCollected;
 		
 	}
 
@@ -132,6 +138,10 @@ public class ImmutableTeamInfo {
 
 	public int getTotalKillsReceived() {
 		return totalKillsReceived;
+	}
+	
+	public int getTotalFlagsCollected() {
+		return totalFlagsCollected;
 	}
 	
 	
