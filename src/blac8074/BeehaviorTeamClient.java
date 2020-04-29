@@ -28,9 +28,12 @@ public class BeehaviorTeamClient extends TeamClient {
 	// The ship's path updates every this many timesteps
 	static final int PATH_UPDATE_INTERVAL = 10;
 	// Whether or not to draw graphics for debugging
-	static final boolean DEBUG_PATH = true;
+	static final boolean DEBUG_PATH = false;
 	static final boolean DEBUG_PLANNER = true;
 
+	// When a ship picks up this many resources, it will return them to base
+	static final int RETURN_RESOURCES_AMT = 500;
+	
 	// Values learned from project 2
 	static final double TRANSLATIONAL_KP = 19.0;
 	static final double ROTATIONAL_KP = 28.0;
@@ -208,6 +211,7 @@ public class BeehaviorTeamClient extends TeamClient {
 					break;
 				case GET_RESOURCES:
 					actions.put(ship.getId(), getResourcesAction(space,ship));
+					break;
 				case WANDER:
 					actions.put(ship.getId(), wanderAction(space, ship));
 					break;
@@ -447,8 +451,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		
 		// Finish task when ship has picked up "enough" resources or is low on energy
-		// TODO: replace Integer.MAX_VALUE with a finite number
-		if (ship.getResources().getTotal() > Integer.MAX_VALUE || ship.getEnergy() < LOW_ENERGY_THRESH) {
+		if (ship.getResources().getTotal() > RETURN_RESOURCES_AMT || ship.getEnergy() < LOW_ENERGY_THRESH) {
 			planner.finishTask(ship);
 		}
 		
@@ -671,7 +674,6 @@ public class BeehaviorTeamClient extends TeamClient {
 		}
 		
 		// Potentially fire every 3 timesteps
-		// TODO: is there some way to avoid firing when the target is behind an obstacle? like if there is an asteroid or friendly ship/base in the way
 		if ((space.getCurrentTimestep() % 3) == 0) {
 			for (AbstractActionableObject actionableObject : actionableObjects){
 				if (actionableObject instanceof Ship) {
@@ -679,14 +681,36 @@ public class BeehaviorTeamClient extends TeamClient {
 					if (targetShips.get(ship) != null) {
 						Position shipPos = ship.getPosition();
 						Position targetShipPos = targetShips.get(ship).getPosition();
-						// Calculate the difference between the ship's current orientation and the orientation it needs to face the targeted ship
-						double angleDiff = actionableObject.getPosition().getOrientation() - new Vector2D(new Position(targetShipPos.getX() - shipPos.getX(),  
-								targetShipPos.getY() - shipPos.getY())).getAngle();
-						angleDiff = (angleDiff + Math.PI) % (2 * Math.PI) - Math.PI;
-						// If the ship is basically pointing at the targeted ship, fire missiles
-						if (Math.abs(angleDiff) < 0.2) {
-							SpaceSettlersPowerupEnum powerup = SpaceSettlersPowerupEnum.FIRE_MISSILE;
-							powerUps.put(actionableObject.getId(), powerup);
+						
+						// Add things that we don't want to shoot to obstructions
+						Set<AbstractObject> shootObstructions = new HashSet<AbstractObject>();
+						// Add asteroids to obstructions
+						shootObstructions.addAll(space.getAsteroids());
+						for (Ship otherShip : space.getShips()) {
+							// Add friendly ships to obstructions
+							if (ship.getTeamName().equals(otherShip.getTeamName()) && ship.getId() != otherShip.getId()) {
+								shootObstructions.add(otherShip);
+							}
+						}
+						for (Base base : space.getBases()) {
+							// Add friendly bases to obstructions
+							if (base.getTeamName().equals(ship.getTeamName())) {
+								shootObstructions.add(base);
+							}
+						}
+						
+						// TODO: I'm not really sure what to put for the freeRadius parameter so may need to check if this works right
+						// If there's nothing to block our missiles between us and the target
+						if (space.isPathClearOfObstructions(shipPos, targetShipPos, shootObstructions, ship.getRadius())) {
+							// Calculate the difference between the ship's current orientation and the orientation it needs to face the targeted ship
+							double angleDiff = actionableObject.getPosition().getOrientation() - new Vector2D(new Position(targetShipPos.getX() - shipPos.getX(),  
+									targetShipPos.getY() - shipPos.getY())).getAngle();
+							angleDiff = (angleDiff + Math.PI) % (2 * Math.PI) - Math.PI;
+							// If the ship is basically pointing at the targeted ship, fire missiles
+							if (Math.abs(angleDiff) < 0.2) {
+								SpaceSettlersPowerupEnum powerup = SpaceSettlersPowerupEnum.FIRE_MISSILE;
+								powerUps.put(actionableObject.getId(), powerup);
+							}
 						}
 					}
 				}
