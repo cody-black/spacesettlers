@@ -17,7 +17,7 @@ import spacesettlers.utilities.Vector2D;
 /**
  * A single ship team that stays buzzy by collecting beacons and cores and shooting at nearby enemies
  * If it happens to accidently collect resources, it buys new bases and energy upgrades
- * 
+ * TODO: update this
  */
 
 public class BeehaviorTeamClient extends TeamClient {
@@ -37,12 +37,10 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Values learned from project 2
 	static final double TRANSLATIONAL_KP = 19.0;
 	static final double ROTATIONAL_KP = 28.0;
-	static final double LOW_ENERGY_THRESH = 2000; // TODO: should this be defined here or in BeePlanner?
+	static final double LOW_ENERGY_THRESH = 2000;
 	static final double SHOOT_ENEMY_DIST = 500;
 	
 	// Graph to store nodes that represent the environment
-	// TODO: might need 1 per ship to prevent ships from crashing into each other? 
-	// maybe have 1 base graph with most of the obstacles (asteroids, enemy bullets, etc.) and have each ship copy the base graph and add a few things as needed?
 	BeeGraph graph;
 	
 	//For storing path graphics so we only have to create them when a new path is generated
@@ -57,13 +55,14 @@ public class BeehaviorTeamClient extends TeamClient {
 
 	// Keeps track of targets that each ship is moving to
 	HashMap<Ship, AbstractObject> targets;
-	// Intended to store the path that a ship will take to move to its target
+	// Stores the path that a ship will take to move to its target
 	HashMap<Ship, ArrayList<BeeNode>> paths;
 	// Ship that is being shot at by each ship
 	HashMap<Ship, Ship> targetShips;
 	// Bee Pursuit - used to move along paths
 	HashMap<Ship, BeePursuit> beePursuits;
 
+	// TODO: some sort of description
 	BeePlanner planner;
 	
 	
@@ -109,7 +108,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		bpGraphics = new HashSet<>();
 		targets = new HashMap<Ship, AbstractObject>();
 		targetShips = new HashMap<Ship, Ship>();
-		planner = new BeePlanner(LOW_ENERGY_THRESH);
+		planner = new BeePlanner();
 		plannerGraphics = new HashSet<>();
 	}
 
@@ -238,6 +237,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return actions;
 	}
 
+	/**
+	 * The ship flies to the enemy flag to pick it up
+	 */
 	private AbstractAction findEnemyFlagAction(Toroidal2DPhysics space, Ship ship) {
 		Position currentPosition = ship.getPosition();
 		// Find new path every so many timesteps
@@ -278,6 +280,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 
+	/**
+	 * The ship flies to the nearest friendly base
+	 */
 	private AbstractAction returnToBaseAction(Toroidal2DPhysics space, Ship ship) {
 		Position currentPosition = ship.getPosition();
 		// Find new path every so many timesteps
@@ -289,7 +294,7 @@ public class BeehaviorTeamClient extends TeamClient {
 
 			if (closestBase == null) {
 				// probably should never happen
-				System.out.println("SOMETHING THAT NEVER SHOULD HAVE HAPPENED... HAPPENED");
+				//System.out.println("No friendly bases found");
 				return new DoNothingAction();
 			}
 
@@ -320,6 +325,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 
+	/**
+	 * The ship flies to its team's flag to return it
+	 */
 	private AbstractAction findAllyFlagAction(Toroidal2DPhysics space, Ship ship) {
 		Flag ourFlag = null;
 		
@@ -354,6 +362,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 
+	/**
+	 * The ship attacks the enemy ship closest to the ship's team's flag
+	 */
 	private AbstractAction guardAction(Toroidal2DPhysics space, Ship ship) {
 		Position currentPosition = ship.getPosition();
 		// Find new path every so many timesteps
@@ -419,6 +430,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 
+	/**
+	 * The ship attacks the ship closest to the ship on its team that is carrying the flag
+	 */
 	private AbstractAction protectAction(Toroidal2DPhysics space, Ship ship) {
 		Position currentPosition = ship.getPosition();
 		// Find new path every so many timesteps
@@ -467,6 +481,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 	
+	/**
+	 * The ship flies to the closest beacon or base with enough energy
+	 */
 	private AbstractAction getEnergyAction(Toroidal2DPhysics space, Ship ship) {
 		// Find new path every so many timesteps
 		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
@@ -506,6 +523,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 	
+	/**
+	 * The ship flies to the closest resource asteroid
+	 */
 	private AbstractAction getResourcesAction(Toroidal2DPhysics space, Ship ship) {
 		// Find new path every so many timesteps
 		if ((space.getCurrentTimestep() % PATH_UPDATE_INTERVAL) == 0) {
@@ -608,10 +628,10 @@ public class BeehaviorTeamClient extends TeamClient {
 		// Add a target graphic at our goal position
 		bpGraphics.add(new TargetGraphics(16, Color.PINK, goalPos));
 
+		// If the ship is allowed to shoot, find an enemy ship to shoot at
 		targetShips.put(ship, null);
-		// If the ship is allowed to shoot, find an enemy ship to target
 		if (planner.shipCanShoot(ship)) {
-			// Find the closest enemy ship within a certain (learned) distance
+			// Find the closest enemy ship within a certain distance
 			double shipDistance = SHOOT_ENEMY_DIST;
 			for (Ship otherShip : space.getShips()) {
 				// If the other ship is an enemy ship and is alive
@@ -625,6 +645,7 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 		}
+		
 		MoveActionWithOrientation action;
 		// If there's no ship to target, don't worry about orientation
 		if (targetShips.get(ship) == null) {
@@ -674,6 +695,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			// Draw current tasks
 			graphics.addAll(plannerGraphics);
 		}
+		
 		return graphics;
 	}
 
@@ -697,7 +719,6 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 		}
-
 
 		// Buy a double max energy powerup if we can afford it
 		if (purchaseCosts.canAfford(PurchaseTypes.POWERUP_DOUBLE_MAX_ENERGY, resourcesAvailable)) {
@@ -763,12 +784,12 @@ public class BeehaviorTeamClient extends TeamClient {
 						Position shipPos = ship.getPosition();
 						Position targetShipPos = targetShips.get(ship).getPosition();
 						
-						// Add things that we don't want to shoot to obstructions
+						// Add things that we don't want to shoot to shootObstructions
 						Set<AbstractObject> shootObstructions = new HashSet<AbstractObject>();
 						// Add asteroids to obstructions
 						shootObstructions.addAll(space.getAsteroids());
 						for (Ship otherShip : space.getShips()) {
-							// Add friendly ships to obstructions
+							// Add other friendly ships to obstructions
 							if (ship.getTeamName().equals(otherShip.getTeamName()) && ship.getId() != otherShip.getId()) {
 								shootObstructions.add(otherShip);
 							}
@@ -779,8 +800,7 @@ public class BeehaviorTeamClient extends TeamClient {
 								shootObstructions.add(base);
 							}
 						}
-						
-						// TODO: I'm not really sure what to put for the freeRadius parameter so may need to check if this works right
+
 						// If there's nothing to block our missiles between us and the target
 						if (space.isPathClearOfObstructions(shipPos, targetShipPos, shootObstructions, ship.getRadius())) {
 							// Calculate the difference between the ship's current orientation and the orientation it needs to face the targeted ship
@@ -906,7 +926,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		return closestEnergy;
 	}
 	
-	/*
+	/**
 	 * Find the nearest friendly base
 	 */
 	private Base pickNearestFriendlyBase(Toroidal2DPhysics space, Ship ship) {
@@ -928,7 +948,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		return closestBase;
 	}
 	
-	/*
+	/**
 	 * Find the nearest AiCore
 	 */
 	private AiCore pickNearestCore(Toroidal2DPhysics space, Ship ship) {
@@ -948,14 +968,14 @@ public class BeehaviorTeamClient extends TeamClient {
 		return closestCore;
 	}
 	
-	/*
+	/**
 	 * Find the nearest enemy ship
 	 */
 	private Ship pickNearestEnemy(Toroidal2DPhysics space, Ship ship) {
 		return pickNearestEnemyToPosition(space, ship, ship.getPosition());
 	}
 
-	/*
+	/**
 	 * Find the nearest enemy ship to a position
 	 */
 	private Ship pickNearestEnemyToPosition(Toroidal2DPhysics space, Ship ship, Position position) {
@@ -975,6 +995,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return closestEnemy;
 	}
 	
+	/**
+	 * Find the nearest mineable asteroid
+	 */
 	private Asteroid pickNearestMineableAsteroid(Toroidal2DPhysics space, Ship ship) {
 		Asteroid closestMineableAsteroid = null;
 		double bestDistance = Double.POSITIVE_INFINITY;
@@ -990,7 +1013,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		return closestMineableAsteroid;
 	}
 	
-	/*
+	/**
 	 * Draws a grid (using lines) of squares of the given size, given the width and height of the grid,
 	 * the position of the upper left corner of the grid, and the color of the grid lines
 	 */
@@ -1020,7 +1043,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return length;
 	}
 
-	// Converts a position to the index of the grid square that contains that position
+	/**
+	 * Converts a position to the index of the grid square that contains that position
+	 */
 	private int positionToNodeIndex(Position position) {
 		int x = (int)(position.getX() / GRID_SIZE);
 		int y = (int)(position.getY() / GRID_SIZE);

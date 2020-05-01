@@ -22,18 +22,18 @@ public class BeePlanner {
     Map<Ship, BeeTask> assignedTasks;
     Map<Ship, Boolean> isFinished;
 
+    // TODO: allow more than one ship to guard or get resources? or is it not worth the effort?
+    // TODO: change default action to resource gathering or guarding?
     boolean isCarryingEnemyFlag = false;
     boolean isFindingEnemyFlag = false;
     boolean isGuarding = false;
     boolean isProtecting = false;
     boolean isGettingResources = false;
     boolean isFindingAllyFlag = false;
-    double lowEnergyThresh;
 
-    public BeePlanner(double lowEnergyThresh) {
+    public BeePlanner() {
         assignedTasks = new HashMap<>();
         isFinished = new HashMap<>();
-        this.lowEnergyThresh = lowEnergyThresh;
     }
 
     public void assignTask(Ship ship, Toroidal2DPhysics space) {
@@ -57,19 +57,19 @@ public class BeePlanner {
         	// This ship just finished gathering resources and needs to bring them back to base
         	assignedTask = BeeTask.RETURN_TO_BASE;
         }
-        else if (ship.getEnergy() < lowEnergyThresh) {
+        else if (ship.getEnergy() < BeehaviorTeamClient.LOW_ENERGY_THRESH) {
         	// This ship is low on energy and needs to get more
         	assignedTask = BeeTask.GET_ENERGY;
         }
-        // Check if our flag's velocity > 0
         else if (ourFlag.getPosition().getTotalTranslationalVelocity() > 0 && !isFindingAllyFlag) {
+        	// Our flag is moving so it's probably left our base, return it
         	assignedTask = BeeTask.FIND_ALLY_FLAG;
         }
         else if (!isGuarding) {
             // No one is guarding, we should guard!
             assignedTask = BeeTask.GUARD;
         // TODO: is there some way to pick the closest ship to the enemy flag that has enough energy?
-        } else if (!isCarryingEnemyFlag && !isFindingEnemyFlag && ship.getEnergy() > lowEnergyThresh) {
+        } else if (!isCarryingEnemyFlag && !isFindingEnemyFlag && ship.getEnergy() > BeehaviorTeamClient.LOW_ENERGY_THRESH) {
             // No one has the flag and we aren't looking for it, let's go get it
             assignedTask = BeeTask.FIND_ENEMY_FLAG;
         }
@@ -78,6 +78,7 @@ public class BeePlanner {
             assignedTask = BeeTask.PROTECT;
         }
         else if (!isGettingResources) {
+        	// No one is getting resources, so go gather resources
         	assignedTask = BeeTask.GET_RESOURCES;
         }
 
@@ -156,7 +157,7 @@ public class BeePlanner {
 	public boolean shipCanShoot(Ship ship) {
 		boolean canShoot = assignedTasks.get(ship) != BeeTask.FIND_ENEMY_FLAG; // Ship is not going for enemy flag
 		canShoot = canShoot && !ship.isCarryingFlag(); // Ship is not carrying enemy flag
-		canShoot = canShoot && ship.getEnergy() > lowEnergyThresh; // Ship has enough energy
+		canShoot = canShoot && ship.getEnergy() > BeehaviorTeamClient.LOW_ENERGY_THRESH; // Ship has enough energy
 		canShoot = canShoot && assignedTasks.get(ship) != BeeTask.GET_RESOURCES; // Ship is not gathering resources
 		return canShoot;
 	}
