@@ -61,7 +61,7 @@ public class BeePlanner {
         	// This ship is low on energy and needs to get more
         	assignedTask = BeeTask.GET_ENERGY;
         }
-        else if (ourFlag.getPosition().getTotalTranslationalVelocity() > 0 && !isFindingAllyFlag) {
+        else if (ourFlag.getPosition().getTotalTranslationalVelocity() > 0 && !isFindingAllyFlag && !ourFlag.isBeingCarried()) {
         	// Our flag is moving so it's probably left our base, return it
         	assignedTask = BeeTask.FIND_ALLY_FLAG;
         }

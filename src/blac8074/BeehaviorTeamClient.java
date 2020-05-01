@@ -355,7 +355,7 @@ public class BeehaviorTeamClient extends TeamClient {
 		paths.put(ship, path);
 		
 		// If our flag is being carried or has been returned
-		if (!ourFlag.isAlive() || ourFlag.getPosition().getTotalTranslationalVelocity() == 0) {
+		if (ourFlag.isBeingCarried() || ourFlag.getPosition().getTotalTranslationalVelocity() == 0) {
 			planner.finishTask(ship);
 		}
 		
@@ -384,7 +384,7 @@ public class BeehaviorTeamClient extends TeamClient {
 
 			// TODO: Make it not leave a radius of the flag or something like that
 			// If our flag is not being carried
-			if (ourFlag.isAlive()) {
+			if (!ourFlag.isBeingCarried()) {
 				// Target nearest enemy to our flag
 				target = pickNearestEnemyToPosition(space, ship, ourFlag.getPosition());
 			}
