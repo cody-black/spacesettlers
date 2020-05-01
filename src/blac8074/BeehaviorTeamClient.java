@@ -554,6 +554,11 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 
+	/**
+	 * This action is the same behavior as Project 2.
+	 * The ship chases and shoots at the nearest enemy ship. 
+	 * When it is low on energy, it goes to a base. If there is a core, it tries to catch the core.
+	 */
 	private AbstractAction wanderAction(Toroidal2DPhysics space, Ship ship) {
 		Position currentPosition = ship.getPosition();
 		// Find new path every so many timesteps
@@ -600,6 +605,9 @@ public class BeehaviorTeamClient extends TeamClient {
 		return getMoveFromBeePursuit(space, ship);
 	}
 
+	/**
+	 * Use BeePursuit to give the ship its MoveAction
+	 */
 	public AbstractAction getMoveFromBeePursuit(Toroidal2DPhysics space, Ship ship) {
 		// Always make a move based on last path
 		Position currentPosition = ship.getPosition();
@@ -702,6 +710,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			PurchaseCosts purchaseCosts) {
 
 		HashMap<UUID, PurchaseTypes> purchases = new HashMap<UUID, PurchaseTypes>();
+		// A new base will only be bought if its at least this far away from all other friendly bases
 		double BASE_BUYING_DISTANCE = 400;
 		
 		// Buy a new ship if we can afford it
@@ -816,8 +825,8 @@ public class BeehaviorTeamClient extends TeamClient {
 		return powerUps;
 	}
 	
-	/*
-	 * Find what object the ship should aim for
+	/**
+	 * Find what object the ship should aim for while using the WANDER action.
 	 */
 	public AbstractObject findTarget(Ship ship, Toroidal2DPhysics space) {
 		AbstractObject targetObj = null;
