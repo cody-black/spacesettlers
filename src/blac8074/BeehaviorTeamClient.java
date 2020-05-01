@@ -174,7 +174,7 @@ public class BeehaviorTeamClient extends TeamClient {
 
 				isSomeoneCarryingTheFlag = isSomeoneCarryingTheFlag || ship.isCarryingFlag();
 
-				BeePlanner.BeeTask task = planner.getTask(ship);
+				BeePlanner.BeeTask task = planner.getTask(ship, space);
 
 				if (DEBUG_PLANNER) {
 					plannerGraphics.add(new TaskGraphics(ship, task));
@@ -321,7 +321,37 @@ public class BeehaviorTeamClient extends TeamClient {
 	}
 
 	private AbstractAction findAllyFlagAction(Toroidal2DPhysics space, Ship ship) {
-		return new DoNothingAction();
+		Flag ourFlag = null;
+		
+		for (Flag flag : space.getFlags()) {
+			if (flag.getTeamName().equals(ship.getTeamName())) {
+				ourFlag = flag;
+				break;
+			}
+		}
+		
+		targets.put(ship, ourFlag);
+		Position currentPosition = ship.getPosition();
+		Position targetPos = ourFlag.getPosition();
+		ArrayList<BeeNode> path;
+
+		// Generate path using A* algorithm
+		if (A_STAR) {
+			path = graph.getAStarPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+		}
+		// Generate path using other algorithm (hill climbing)
+		else {
+			path = graph.getHillClimbingPath(positionToNodeIndex(currentPosition), positionToNodeIndex(targetPos));
+		}
+		beePursuits.get(ship).setPath(path);
+		paths.put(ship, path);
+		
+		// If our flag is being carried or has been returned
+		if (!ourFlag.isAlive() || ourFlag.getPosition().getTotalTranslationalVelocity() == 0) {
+			planner.finishTask(ship);
+		}
+		
+		return getMoveFromBeePursuit(space, ship);
 	}
 
 	private AbstractAction guardAction(Toroidal2DPhysics space, Ship ship) {

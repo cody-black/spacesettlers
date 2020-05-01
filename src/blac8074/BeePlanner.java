@@ -1,6 +1,8 @@
 package blac8074;
 
+import spacesettlers.objects.Flag;
 import spacesettlers.objects.Ship;
+import spacesettlers.simulator.Toroidal2DPhysics;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +27,7 @@ public class BeePlanner {
     boolean isGuarding = false;
     boolean isProtecting = false;
     boolean isGettingResources = false;
+    boolean isFindingAllyFlag = false;
     double lowEnergyThresh;
 
     public BeePlanner(double lowEnergyThresh) {
@@ -33,8 +36,16 @@ public class BeePlanner {
         this.lowEnergyThresh = lowEnergyThresh;
     }
 
-    public void assignTask(Ship ship) {
-        BeeTask assignedTask = BeeTask.WANDER;
+    public void assignTask(Ship ship, Toroidal2DPhysics space) {
+    	Flag ourFlag = null;
+		for (Flag flag : space.getFlags()) {
+			if (flag.getTeamName().equals(ship.getTeamName())) {
+				ourFlag = flag;
+				break;
+			}
+		}
+    	
+    	BeeTask assignedTask = BeeTask.WANDER;
 
         if (ship.isCarryingFlag()) {
         	// This ship is carrying the flag, it needs to return it to a base
@@ -49,6 +60,10 @@ public class BeePlanner {
         else if (ship.getEnergy() < lowEnergyThresh) {
         	// This ship is low on energy and needs to get more
         	assignedTask = BeeTask.GET_ENERGY;
+        }
+        // Check if our flag's velocity > 0
+        else if (ourFlag.getPosition().getTotalTranslationalVelocity() > 0 && !isFindingAllyFlag) {
+        	assignedTask = BeeTask.FIND_ALLY_FLAG;
         }
         else if (!isGuarding) {
             // No one is guarding, we should guard!
@@ -76,6 +91,7 @@ public class BeePlanner {
             case RETURN_TO_BASE:
             	break;
             case FIND_ALLY_FLAG:
+            	isFindingAllyFlag = true;
                 break;
             case GUARD:
                 isGuarding = true;
@@ -104,6 +120,7 @@ public class BeePlanner {
             case RETURN_TO_BASE:
                 break;
             case FIND_ALLY_FLAG:
+            	isFindingAllyFlag = false;
                 break;
             case GUARD:
                 isGuarding = false; // Assumes only one guard
@@ -121,9 +138,9 @@ public class BeePlanner {
         }
     }
 
-    public BeeTask getTask(Ship ship) {
+    public BeeTask getTask(Ship ship , Toroidal2DPhysics space) {
         if (!assignedTasks.containsKey(ship) || isFinished.get(ship) || ship.isCarryingFlag()) {
-            assignTask(ship);
+            assignTask(ship, space);
         }
 
         return assignedTasks.get(ship);
