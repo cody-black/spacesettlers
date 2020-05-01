@@ -15,11 +15,8 @@ import spacesettlers.utilities.Position;
 import spacesettlers.utilities.Vector2D;
 
 /**
- * A single ship team that stays buzzy by collecting beacons and cores and shooting at nearby enemies
- * If it happens to accidently collect resources, it buys new bases and energy upgrades
- * TODO: update this
+ * A multi-ship capture the flag team that use a BeePlanner to coordinate and assign various tasks.
  */
-
 public class BeehaviorTeamClient extends TeamClient {
 	// Size of each square in the grid (40 is the max int that works, 10 kinda works but lags, higher/lower values untested)
 	static final double GRID_SIZE = 20;
@@ -62,7 +59,7 @@ public class BeehaviorTeamClient extends TeamClient {
 	// Bee Pursuit - used to move along paths
 	HashMap<Ship, BeePursuit> beePursuits;
 
-	// TODO: some sort of description
+	// Bee Planner - keeps track of and assigns tasks to ships
 	BeePlanner planner;
 	
 	
@@ -300,7 +297,7 @@ public class BeehaviorTeamClient extends TeamClient {
 
 			target = closestBase;
 
-			if (space.findShortestDistance(closestBase.getPosition(), ship.getPosition()) < 50) { // TODO: what is the actual range for this
+			if (space.findShortestDistance(closestBase.getPosition(), ship.getPosition()) < 50) {
 				planner.finishTask(ship);
 			}
 
@@ -382,8 +379,6 @@ public class BeehaviorTeamClient extends TeamClient {
 				}
 			}
 
-			// TODO: Make it not leave a radius of the flag or something like that
-			// If our flag is not being carried
 			if (!ourFlag.isBeingCarried()) {
 				// Target nearest enemy to our flag
 				target = pickNearestEnemyToPosition(space, ship, ourFlag.getPosition());
@@ -475,7 +470,7 @@ public class BeehaviorTeamClient extends TeamClient {
 			}
 		}
 
-		// The Guard task is only valid for 1 tick
+		// The Protect task is only valid for 1 tick
 		planner.finishTask(ship);
 
 		return getMoveFromBeePursuit(space, ship);

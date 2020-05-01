@@ -7,8 +7,6 @@ import spacesettlers.utilities.Vector2D;
 
 /**
  * The BeeGraph stores and performs operations on BeeNodes
- * 
- *
  */
 
 public class BeeGraph {
@@ -46,7 +44,7 @@ public class BeeGraph {
 		return height;
 	}
 	
-	/*
+	/**
 	 *  When the node's grid square has an obstacle in it, it is obstructed
 	 *  Returns true if a node has been obstructed
 	 */
@@ -81,7 +79,7 @@ public class BeeGraph {
 		}
 	}
 	
-	/*
+	/**
 	 * Returns the distance between two nodes
 	 */
 	public double findDistance(int nodeIndex1, int nodeIndex2) {
@@ -151,9 +149,8 @@ public class BeeGraph {
 		}
 	}
 
-	/*
+	/**
 	 * Uses A* to find a path from the start node to the goal node
-	 * TODO: clean this up
 	 */
 	public ArrayList<BeeNode> getAStarPath(int startIndex, int goalIndex) {
 		unobstructNode(startIndex); // This won't return a path if the start node is obstructed
@@ -231,7 +228,7 @@ public class BeeGraph {
 		return path;
 	}
 	
-	/*
+	/**
 	 * Uses hill climbing to find a path from the start node to the goal node
 	 */
 	public ArrayList<BeeNode> getHillClimbingPath(int startIndex, int goalIndex) {

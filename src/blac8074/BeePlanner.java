@@ -7,23 +7,26 @@ import spacesettlers.simulator.Toroidal2DPhysics;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * The BeePlanner assigns tasks to ships, keeps track of which ship is assigned to which task,
+ * and keeps track of whether a ship is finished with its task.
+ *
+ */
 public class BeePlanner {
     public enum BeeTask {
         FIND_ENEMY_FLAG, // Ship should move towards the enemy flag
         RETURN_TO_BASE, // Ship should go to nearest friendly base
-        FIND_ALLY_FLAG, // If our flag is gone, Ship should return it (?)
+        FIND_ALLY_FLAG, // Ship should return our flag
         GUARD, // Ship should guard our flag
         PROTECT, // Ship should protect flag carrier
         GET_ENERGY, // Ship should travel to closest beacon or base to get more energy
         GET_RESOURCES, // Ship should pick up nearest resource asteroid
-        WANDER // Project 2 behaviour
+        WANDER // Ship should chase nearest enemy and shoot it while collecting beacons and cores (Project 2 behavior)
     }
 
-    Map<Ship, BeeTask> assignedTasks;
-    Map<Ship, Boolean> isFinished;
+    Map<Ship, BeeTask> assignedTasks; // Stores the tasks that are assigned to each ship
+    Map<Ship, Boolean> isFinished; // Tracks whether each ship is finished with its task
 
-    // TODO: allow more than one ship to guard or get resources? or is it not worth the effort?
-    // TODO: change default action to resource gathering or guarding?
     boolean isCarryingEnemyFlag = false;
     boolean isFindingEnemyFlag = false;
     boolean isGuarding = false;
@@ -36,7 +39,11 @@ public class BeePlanner {
         isFinished = new HashMap<>();
     }
 
+    /**
+     * Assigns the ship to a task
+     */
     public void assignTask(Ship ship, Toroidal2DPhysics space) {
+    	// Get our flag
     	Flag ourFlag = null;
 		for (Flag flag : space.getFlags()) {
 			if (flag.getTeamName().equals(ship.getTeamName())) {
@@ -45,6 +52,7 @@ public class BeePlanner {
 			}
 		}
     	
+		// Default task is WANDER
     	BeeTask assignedTask = BeeTask.WANDER;
 
         if (ship.isCarryingFlag()) {
@@ -68,7 +76,6 @@ public class BeePlanner {
         else if (!isGuarding) {
             // No one is guarding, we should guard!
             assignedTask = BeeTask.GUARD;
-        // TODO: is there some way to pick the closest ship to the enemy flag that has enough energy?
         } else if (!isCarryingEnemyFlag && !isFindingEnemyFlag && ship.getEnergy() > BeehaviorTeamClient.LOW_ENERGY_THRESH) {
             // No one has the flag and we aren't looking for it, let's go get it
             assignedTask = BeeTask.FIND_ENEMY_FLAG;
@@ -110,6 +117,9 @@ public class BeePlanner {
         }
     }
 
+    /**
+     * Marks each ship as having finished its task and sets the relevant boolean flags
+     */
     public void finishTask(Ship ship) {
         BeeTask finishedTask = assignedTasks.get(ship);
         isFinished.put(ship, true);
@@ -139,6 +149,10 @@ public class BeePlanner {
         }
     }
 
+    /**
+     * Returns the task assigned to the given ship.
+     * If the ship does not have a task or is finished with its current task, a new task is assigned.
+     */
     public BeeTask getTask(Ship ship , Toroidal2DPhysics space) {
         if (!assignedTasks.containsKey(ship) || isFinished.get(ship) || ship.isCarryingFlag()) {
             assignTask(ship, space);
